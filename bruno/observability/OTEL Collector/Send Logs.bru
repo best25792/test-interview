@@ -1,0 +1,59 @@
+meta {
+  name: Send Logs
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{alloy_url}}/v1/logs
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "demo-service"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "timeUnixNano": "{{$timestamp}}000000000",
+                "severityText": "INFO",
+                "body": {
+                  "stringValue": "Test log from Bruno"
+                },
+                "attributes": [
+                  {
+                    "key": "level",
+                    "value": {
+                      "stringValue": "info"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+docs {
+  # Send Logs to Grafana Alloy
+  
+  Send logs to Grafana Alloy via OTLP HTTP.
+  
+  Alloy will forward them to Loki.
+}

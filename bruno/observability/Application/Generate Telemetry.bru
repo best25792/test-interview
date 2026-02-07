@@ -1,0 +1,30 @@
+meta {
+  name: Generate Telemetry
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{app_url}}/api/v1/payments/initiate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "userId": "1"
+  }
+}
+
+docs {
+  # Generate Telemetry from Application
+  
+  Make a request to the application to generate traces, metrics, and logs.
+  
+  This will create telemetry data that flows through:
+  1. Application → Grafana Alloy → Tempo (traces)
+  2. Application → Grafana Alloy → Prometheus (metrics)
+  3. Application → Grafana Alloy → Loki (logs)
+  
+  Check Grafana to see the telemetry data appear.
+}

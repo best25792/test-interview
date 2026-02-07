@@ -1,0 +1,28 @@
+# Docker volumes
+postgres_data/
+loki_data/
+tempo_data/
+prometheus_data/
+grafana_data/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Java build output
+**/target/
+
+# Node
+**/node_modules/
+frontend/.next/
+
+# OpenTelemetry agent (large binary)
+**/opentelemetry-javaagent.jar
+
+# Logs
+*.log

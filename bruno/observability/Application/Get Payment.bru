@@ -1,0 +1,17 @@
+meta {
+  name: Get Payment
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{app_url}}/api/v1/payments/1
+  body: none
+  auth: none
+}
+
+docs {
+  # Get Payment
+  
+  Retrieve a payment to generate HTTP request telemetry.
+}

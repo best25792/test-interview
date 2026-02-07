@@ -1,0 +1,17 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{alloy_url}}/api/v0/status
+  body: none
+  auth: none
+}
+
+docs {
+  # Grafana Alloy Health Check
+  
+  Check if Grafana Alloy is running and get status.
+}

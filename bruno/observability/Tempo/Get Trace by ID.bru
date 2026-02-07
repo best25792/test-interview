@@ -1,0 +1,19 @@
+meta {
+  name: Get Trace by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{tempo_url}}/api/traces/{{trace_id}}
+  body: none
+  auth: none
+}
+
+docs {
+  # Get Trace by ID
+  
+  Retrieve a specific trace by its trace ID.
+  
+  Replace {{trace_id}} with an actual trace ID from a query result.
+}

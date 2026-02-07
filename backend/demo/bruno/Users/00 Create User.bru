@@ -1,0 +1,47 @@
+meta {
+  name: Create User
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{base_url}}/api/v1/users
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "testuser",
+    "email": "testuser@example.com",
+    "phoneNumber": "+1234567890",
+    "isActive": true,
+    "isVerified": false
+  }
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+}
+
+tests {
+  test("Status code is 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  
+  test("Response has user id", function() {
+    expect(res.body.id).to.exist;
+  });
+  
+  test("Response has username", function() {
+    expect(res.body.username).to.equal("testuser");
+  });
+  
+  test("Response has email", function() {
+    expect(res.body.email).to.equal("testuser@example.com");
+  });
+}

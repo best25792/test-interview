@@ -1,0 +1,33 @@
+meta {
+  name: Complete Payment Flow
+  type: http
+  seq: 1
+}
+
+# Complete Payment Flow Example
+# This file documents the complete flow but each step should be executed separately
+
+# Step 1: User initiates payment
+# POST /api/v1/payments/initiate
+# Body: { "userId": 1 }
+# Response: { "transactionId": 1, "qrCode": "...", "success": true }
+
+# Step 2: User shows QR to merchant (no API call)
+
+# Step 3: Merchant processes payment
+# POST /api/v1/payments/{transactionId}/process
+# Body: { "qrCode": "...", "amount": 100.00, "currency": "USD", "merchantId": "MERCHANT_001" }
+
+# Step 4: Merchant confirms payment
+# POST /api/v1/payments/{transactionId}/confirm
+# Response: Payment status becomes COMPLETED, wallet is deducted
+
+get {
+  url: {{base_url}}/api/v1/payments
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+}

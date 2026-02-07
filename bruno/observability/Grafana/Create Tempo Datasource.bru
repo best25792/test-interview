@@ -1,0 +1,82 @@
+meta {
+  name: Create Tempo Datasource
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{grafana_url}}/api/datasources
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: {{grafana_user}}
+  password: {{grafana_password}}
+}
+
+body:json {
+  {
+    "name": "Tempo",
+    "type": "tempo",
+    "url": "http://tempo:3200",
+    "access": "proxy",
+    "jsonData": {
+      "httpMethod": "GET",
+      "tracesToLogs": {
+        "datasourceUid": "loki",
+        "tags": ["job", "instance", "pod", "namespace"],
+        "mappedTags": [
+          {
+            "key": "service.name",
+            "value": "service"
+          }
+        ],
+        "mapTagNamesEnabled": false,
+        "spanStartTimeShift": "1h",
+        "spanEndTimeShift": "1h",
+        "filterByTraceID": false,
+        "filterBySpanID": false
+      },
+      "tracesToMetrics": {
+        "datasources": [
+          {
+            "datasourceUid": "prometheus",
+            "tags": [
+              {
+                "key": "service.name",
+                "value": "service"
+              },
+              {
+                "key": "job"
+              }
+            ],
+            "queries": [
+              {
+                "name": "Sample query",
+                "query": "sum(rate(tempo_spanmetrics_latency_bucket{$__tags}[5m]))"
+              }
+            ]
+          }
+        ]
+      },
+      "nodeGraph": {
+        "enabled": true
+      },
+      "search": {
+        "hide": false
+      },
+      "serviceMap": {
+        "datasourceUid": "prometheus"
+      }
+    }
+  }
+}
+
+docs {
+  # Create Tempo Datasource
+  
+  Create a Tempo datasource in Grafana with traces-to-logs and traces-to-metrics linking.
+  
+  Note: Requires Prometheus and Loki datasources to exist first (use their UIDs).
+}

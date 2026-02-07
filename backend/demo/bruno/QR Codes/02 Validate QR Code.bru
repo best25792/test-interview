@@ -1,0 +1,36 @@
+meta {
+  name: Validate QR Code
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/qrcodes/validate
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "code": "{{qrCode}}"
+  }
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  qrCode: PAYMENT_1_ABC123DEF456
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("QR code is valid", function() {
+    expect(res.body.status).to.equal("ACTIVE");
+  });
+}

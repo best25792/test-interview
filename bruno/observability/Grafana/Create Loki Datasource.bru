@@ -1,0 +1,32 @@
+meta {
+  name: Create Loki Datasource
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{grafana_url}}/api/datasources
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: {{grafana_user}}
+  password: {{grafana_password}}
+}
+
+body:json {
+  {
+    "name": "Loki",
+    "type": "loki",
+    "url": "http://loki:3100",
+    "access": "proxy",
+    "jsonData": {}
+  }
+}
+
+docs {
+  # Create Loki Datasource
+  
+  Create a Loki datasource in Grafana via API.
+}

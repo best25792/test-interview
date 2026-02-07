@@ -1,0 +1,95 @@
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 1h
+    compacted_block_retention: 10m
+
+# querier:
+#   query_live_store: true
+
+
+
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        block_retention: 1h
+
+backend_worker:
+  backend_scheduler_addr: backend-scheduler:3200
+  compaction:
+    block_retention: 1h
+  ring:
+    kvstore:
+      store: memberlist
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal # where to store the wal locally
+    pool:
+      max_workers: 100
+      queue_depth: 10000
+# Configures the metrics generator component of Tempo.
+metrics_generator:
+  # Specifies which processors to use.
+  processor:
+    # Span metrics create metrics based on span type, duration, name and service.
+    span_metrics:
+        # Configure extra dimensions to add as metric labels.
+        dimensions:
+          - http.method
+          - http.target
+          - http.status_code
+          - service.version
+    # Service graph metrics create node and edge metrics for determinng service interactions.
+    service_graphs:
+        # Configure extra dimensions to add as metric labels.
+        dimensions:
+          - http.method
+          - http.target
+          - http.status_code
+          - service.version
+    # Configure the local blocks processor.
+    local_blocks:
+        # Ensure that metrics blocks are flushed to storage so TraceQL metrics queries against historical data.
+        flush_to_storage: true
+  # The registry configuration determines how to process metrics.
+  registry:
+    collection_interval: 5s                 # Create new metrics every 5s.
+    # Configure extra labels to be added to metrics.
+    external_labels:
+      source: tempo                         # Add a `{source="tempo"}` label.
+      group: 'mythical'                     # Add a `{group="mythical"}` label.
+  # Configures where the store for metrics is located.
+  storage:
+    # WAL for metrics generation.
+    path: /tmp/tempo/generator/wal
+    # Where to remote write metrics to.
+    remote_write:
+      - url: http://prometheus:9090/api/v1/push  # URL of locally running Mimir instance.
+        send_exemplars: true # Send exemplars along with their metrics.
+  traces_storage:
+    path: /tmp/tempo/generator/traces
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics, local-blocks] # enables metrics generator
+      generate_native_histograms: both

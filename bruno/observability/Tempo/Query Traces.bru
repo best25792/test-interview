@@ -1,0 +1,23 @@
+meta {
+  name: Query Traces
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{tempo_url}}/api/search?tags=service.name=demo&limit=20
+  body: none
+  auth: none
+}
+
+docs {
+  # Query Traces from Tempo
+  
+  Search for traces using tags.
+  
+  Common tags:
+  - service.name
+  - http.method
+  - http.status_code
+  - error
+}

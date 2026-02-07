@@ -1,0 +1,369 @@
+services:
+  # PostgreSQL Database - Single instance with 4 databases for microservices
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: sa
+      POSTGRES_PASSWORD: ""
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+
+  # Loki - Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    networks:
+      - monitoring
+
+  # Tempo - Distributed tracing
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./infra/observability/tempo-config.yaml:/etc/tempo/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"   # tempo
+    networks:
+      - monitoring
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-remote-write-receiver'
+    volumes:
+      - ./infra/observability/prometheus-config.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_FEATURE_TOGGLES_ENABLE=tempoSearch,tempoBackendSearch,tempoServiceGraph,flameGraph
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+    networks:
+      - monitoring
+
+  # Grafana Alloy - Telemetry agent
+  grafana-alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./infra/observability/alloy-config.alloy:/etc/alloy/config.alloy
+    ports:
+      - "12345:12345"   # Alloy HTTP server (for status/metrics)
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - monitoring
+
+  # Kafka - Message broker (KRaft mode, no Zookeeper required)
+  kafka:
+    image: apache/kafka-native:latest
+    container_name: kafka
+    ports:
+      - 9092:9092
+    environment:
+      # Configure listeners for both docker and host communication
+      KAFKA_LISTENERS: CONTROLLER://localhost:9091,HOST://0.0.0.0:9092,DOCKER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Listener to use for broker-to-broker communication
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      # Settings required for KRaft mode
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9091
+      # Required for a single node cluster
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Group configuration
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics configuration
+      KAFKA_NUM_PARTITIONS: 3
+    networks:
+      - monitoring
+  kafka-ui:
+    image: kafbat/kafka-ui:main
+    container_name: kafka-ui
+    ports:
+      - 38080:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "true"
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+    depends_on:
+      - kafka
+    networks:
+      - monitoring
+
+  # ============================================
+  # Backend Microservices (with resource limits)
+  # ============================================
+
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      # Database (externalized)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_db
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # Inter-service communication
+      - WALLET_SERVICE_URL=http://wallet-service:8082
+      # OpenTelemetry (gRPC)
+      - OTEL_SERVICE_NAME=user-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      grafana-alloy:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+
+  wallet-service:
+    build:
+      context: ./backend
+      dockerfile: wallet-service/Dockerfile
+    container_name: wallet-service
+    ports:
+      - "8082:8082"
+    environment:
+      # Database (externalized)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/wallet_db
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # Kafka
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9093
+      # OpenTelemetry (gRPC)
+      - OTEL_SERVICE_NAME=wallet-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      grafana-alloy:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+
+  payment-service:
+    build:
+      context: ./backend
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    ports:
+      - "8083:8083"
+    environment:
+      # Database (externalized)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/payment_db
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # Inter-service communication
+      - USER_SERVICE_URL=http://user-service:8081
+      - WALLET_SERVICE_URL=http://wallet-service:8082
+      - QR_CODE_SERVICE_URL=http://qr-service:8084
+      # Kafka
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9093
+      # OpenTelemetry (gRPC)
+      - OTEL_SERVICE_NAME=payment-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      grafana-alloy:
+        condition: service_started
+      user-service:
+        condition: service_started
+      wallet-service:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+
+  qr-service:
+    build:
+      context: ./backend
+      dockerfile: qr-service/Dockerfile
+    container_name: qr-service
+    ports:
+      - "8084:8084"
+    environment:
+      # Database (externalized)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/qr_db
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # Kafka
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9093
+      # OpenTelemetry (gRPC)
+      - OTEL_SERVICE_NAME=qr-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      grafana-alloy:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+
+  order-service:
+    build:
+      context: ./backend
+      dockerfile: order-service/Dockerfile
+    container_name: order-service
+    ports:
+      - "8085:8085"
+    environment:
+      # Database (externalized)
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/merchant_db
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=
+      # OpenTelemetry (gRPC)
+      - OTEL_SERVICE_NAME=order-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://grafana-alloy:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      grafana-alloy:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+
+  # ============================================
+  # Load Testing Tools
+  # ============================================
+
+  # k6 - Load testing (run with: docker compose run k6 run /scripts/payment-flow.js)
+  k6:
+    image: grafana/k6:latest
+    container_name: k6-load-test
+    volumes:
+      - ./infra/load-tests:/scripts
+    environment:
+      - BASE_URL=http://payment-service
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - monitoring
+    profiles:
+      - loadtest
+
+  # Toxiproxy - Network fault injection
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:latest
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"     # Toxiproxy API
+      - "18081:18081"   # Proxy for user-service
+      - "18082:18082"   # Proxy for wallet-service
+      - "18083:18083"   # Proxy for payment-service
+      - "18084:18084"   # Proxy for qr-service
+      - "18085:18085"   # Proxy for order-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    networks:
+      - monitoring
+    profiles:
+      - loadtest
+
+volumes:
+  postgres_data:
+  loki_data:
+  tempo_data:
+  prometheus_data:
+  grafana_data:
+  kafka_data:
+
+networks:
+  monitoring:
+    driver: bridge

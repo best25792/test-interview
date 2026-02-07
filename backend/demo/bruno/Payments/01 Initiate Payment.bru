@@ -1,0 +1,39 @@
+meta {
+  name: Initiate Payment
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/payments/initiate
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userId": 1
+  }
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+}
+
+tests {
+  test("Status code is 201", function() {
+    expect(res.status).to.equal(201);
+  });
+  
+  test("Response has transactionId", function() {
+    expect(res.body.transactionId).to.exist;
+  });
+  
+  test("Response has qrCode", function() {
+    expect(res.body.qrCode).to.exist;
+  });
+}

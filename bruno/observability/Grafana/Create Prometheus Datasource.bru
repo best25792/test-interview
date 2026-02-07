@@ -1,0 +1,33 @@
+meta {
+  name: Create Prometheus Datasource
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{grafana_url}}/api/datasources
+  body: json
+  auth: basic
+}
+
+auth:basic {
+  username: {{grafana_user}}
+  password: {{grafana_password}}
+}
+
+body:json {
+  {
+    "name": "Prometheus",
+    "type": "prometheus",
+    "url": "http://prometheus:9090",
+    "access": "proxy",
+    "isDefault": true,
+    "jsonData": {}
+  }
+}
+
+docs {
+  # Create Prometheus Datasource
+  
+  Create a Prometheus datasource in Grafana via API.
+}

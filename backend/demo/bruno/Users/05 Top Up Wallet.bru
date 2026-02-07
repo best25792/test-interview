@@ -1,0 +1,36 @@
+meta {
+  name: Top Up Wallet
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/v1/users/{{userId}}/wallet/topup
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "amount": 500.00
+  }
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  userId: 1
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Balance is updated", function() {
+    expect(res.body.balance).to.exist;
+  });
+}

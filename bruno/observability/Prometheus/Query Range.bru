@@ -1,0 +1,23 @@
+meta {
+  name: Query Range
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{prometheus_url}}/api/v1/query_range?query=up&start={{$timestamp - 3600}}&end={{$timestamp}}&step=15s
+  body: none
+  auth: none
+}
+
+docs {
+  # Query Range Metrics
+  
+  Get metrics over a time range.
+  
+  Parameters:
+  - query: PromQL query
+  - start: Start timestamp (Unix)
+  - end: End timestamp (Unix)
+  - step: Query resolution step width in seconds
+}

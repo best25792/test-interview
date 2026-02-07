@@ -1,0 +1,26 @@
+meta {
+  name: Get User by ID
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/users/{{userId}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  userId: 1
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Response has user id", function() {
+    expect(res.body.id).to.exist;
+  });
+}

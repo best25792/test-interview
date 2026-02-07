@@ -1,0 +1,41 @@
+meta {
+  name: Process Payment
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/payments/{{paymentId}}/process
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "qrCode": "{{qrCode}}",
+    "amount": 100.00,
+    "currency": "USD",
+    "merchantId": "MERCHANT_001",
+    "description": "Payment for goods"
+  }
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  paymentId: 1
+  qrCode: PAYMENT_1_ABC123DEF456
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Payment status is PROCESSING", function() {
+    expect(res.body.status).to.equal("PROCESSING");
+  });
+}

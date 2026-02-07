@@ -1,0 +1,22 @@
+meta {
+  name: Get Metrics
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{prometheus_url}}/api/v1/query?query=up
+  body: none
+  auth: none
+}
+
+docs {
+  # Get Prometheus Metrics
+  
+  Query Prometheus for metrics using PromQL.
+  
+  Example queries:
+  - `up` - Check if targets are up
+  - `rate(http_requests_total[5m])` - Request rate
+  - `http_request_duration_seconds` - Request duration
+}

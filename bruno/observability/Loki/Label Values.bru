@@ -1,0 +1,17 @@
+meta {
+  name: Label Values
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{loki_url}}/loki/api/v1/label/job/values
+  body: none
+  auth: none
+}
+
+docs {
+  # Get Label Values
+  
+  Get all values for a specific label (e.g., job, level, service).
+}

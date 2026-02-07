@@ -1,0 +1,26 @@
+meta {
+  name: Confirm Payment
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/v1/payments/{{paymentId}}/confirm
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  paymentId: 1
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Payment status is COMPLETED", function() {
+    expect(res.body.status).to.equal("COMPLETED");
+  });
+}

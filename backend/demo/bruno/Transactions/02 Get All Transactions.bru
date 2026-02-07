@@ -1,0 +1,27 @@
+meta {
+  name: Get All Transactions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/transactions?paymentId={{paymentId}}&type={{type}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  paymentId: 
+  type: 
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Response is array", function() {
+    expect(res.body).to.be.an('array');
+  });
+}

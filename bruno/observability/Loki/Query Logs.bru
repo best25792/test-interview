@@ -1,0 +1,22 @@
+meta {
+  name: Query Logs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{loki_url}}/loki/api/v1/query_range?query={job="demo"}&start={{$timestamp - 3600}}&end={{$timestamp}}&limit=100
+  body: none
+  auth: none
+}
+
+docs {
+  # Query Loki Logs
+  
+  Query logs from Loki using LogQL.
+  
+  Example queries:
+  - `{job="demo"}` - All logs from demo job
+  - `{level="error"}` - Error level logs
+  - `rate({job="demo"}[5m])` - Log rate
+}

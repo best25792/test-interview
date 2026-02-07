@@ -1,0 +1,27 @@
+meta {
+  name: Get Available Balance
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/v1/users/{{userId}}/wallet/available-balance
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  userId: 1
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Response has totalBalance and availableBalance", function() {
+    expect(res.body.totalBalance).to.exist;
+    expect(res.body.availableBalance).to.exist;
+  });
+}

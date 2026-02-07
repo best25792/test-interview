@@ -1,0 +1,26 @@
+meta {
+  name: Get QR Code by ID
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/qrcodes/{{qrCodeId}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  qrCodeId: 1
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Response has QR code", function() {
+    expect(res.body.code).to.exist;
+  });
+}

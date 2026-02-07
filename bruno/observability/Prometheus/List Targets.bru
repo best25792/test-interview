@@ -1,0 +1,17 @@
+meta {
+  name: List Targets
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{prometheus_url}}/api/v1/targets
+  body: none
+  auth: none
+}
+
+docs {
+  # List Prometheus Targets
+  
+  Get all configured scrape targets and their status.
+}

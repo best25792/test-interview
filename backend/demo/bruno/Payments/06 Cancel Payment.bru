@@ -1,0 +1,27 @@
+meta {
+  name: Cancel Payment
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/api/v1/payments/{{paymentId}}/cancel?reason={{reason}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  paymentId: 1
+  reason: User cancelled payment
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Payment status is CANCELLED", function() {
+    expect(res.body.status).to.equal("CANCELLED");
+  });
+}

@@ -1,0 +1,66 @@
+meta {
+  name: Send Trace
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{alloy_url}}/v1/traces
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "resourceSpans": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "demo-service"
+              }
+            }
+          ]
+        },
+        "scopeSpans": [
+          {
+            "spans": [
+              {
+                "traceId": "{{$uuid}}",
+                "spanId": "{{$uuid}}",
+                "name": "test-span",
+                "kind": 1,
+                "startTimeUnixNano": "{{$timestamp}}000000000",
+                "endTimeUnixNano": "{{$timestamp + 100}}000000000",
+                "attributes": [
+                  {
+                    "key": "http.method",
+                    "value": {
+                      "stringValue": "GET"
+                    }
+                  },
+                  {
+                    "key": "http.status_code",
+                    "value": {
+                      "intValue": "200"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+docs {
+  # Send Trace to Grafana Alloy
+  
+  Send a trace to Grafana Alloy via OTLP HTTP.
+  
+  Alloy will forward it to Tempo.
+}

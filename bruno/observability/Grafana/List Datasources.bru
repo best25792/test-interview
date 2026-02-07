@@ -1,0 +1,22 @@
+meta {
+  name: List Datasources
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{grafana_url}}/api/datasources
+  body: none
+  auth: basic
+}
+
+auth:basic {
+  username: {{grafana_user}}
+  password: {{grafana_password}}
+}
+
+docs {
+  # List Grafana Datasources
+  
+  Get all configured datasources in Grafana.
+}

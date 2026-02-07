@@ -1,0 +1,20 @@
+package com.example.userservice.config;
+
+//import io.micrometer.tracing.Tracer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration(proxyBeanMethods = false)
+public class FilterConfiguration {
+
+//    @Bean
+//    HeaderLoggerFilter headerLoggerFilter() {
+//        return new HeaderLoggerFilter();
+//    }
+//
+//    @Bean
+//    AddTraceIdFilter addTraceIdFilter(Tracer tracer) {
+//        return new AddTraceIdFilter(tracer);
+//    }
+
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Get All Payments
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/v1/payments?status={{status}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  base_url: http://localhost:8080
+  status: 
+}
+
+tests {
+  test("Status code is 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("Response is array", function() {
+    expect(res.body).to.be.an('array');
+  });
+}

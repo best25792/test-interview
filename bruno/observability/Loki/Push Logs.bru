@@ -1,0 +1,41 @@
+meta {
+  name: Push Logs
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{loki_url}}/loki/api/v1/push
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "streams": [
+      {
+        "stream": {
+          "job": "demo",
+          "level": "info",
+          "service": "payment-service"
+        },
+        "values": [
+          [
+            "{{$timestamp}}000000000",
+            "Test log message from Bruno"
+          ]
+        ]
+      }
+    ]
+  }
+}
+
+docs {
+  # Push Logs to Loki
+  
+  Send logs directly to Loki via HTTP push API.
+  
+  Format:
+  - Timestamp in nanoseconds
+  - Log message
+}

@@ -1,0 +1,17 @@
+meta {
+  name: Get Trace Metrics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{tempo_url}}/api/metrics/query_range?query={service.name="demo"}&start={{$timestamp - 3600}}&end={{$timestamp}}&step=15s
+  body: none
+  auth: none
+}
+
+docs {
+  # Get Trace Metrics
+  
+  Query trace metrics from Tempo.
+}

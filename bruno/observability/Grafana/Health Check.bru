@@ -1,0 +1,17 @@
+meta {
+  name: Health Check
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{grafana_url}}/api/health
+  body: none
+  auth: none
+}
+
+docs {
+  # Grafana Health Check
+  
+  Check if Grafana is running and healthy.
+}
