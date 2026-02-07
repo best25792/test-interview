@@ -4,25 +4,37 @@ A full-stack QR code payment system built with microservices architecture, featu
 
 ## Architecture
 
-```
-┌────────────┐     ┌──────────────┐     ┌───────────────┐
-│  Frontend   │────>│   Payment    │────>│  QR Service   │
-│  (Next.js)  │     │   Service    │     │   :8084       │
-│             │     │   :8083      │     └───────────────┘
-└────────────┘     │              │
-                    │              │────>┌───────────────┐
-                    │              │     │ Wallet Service │
-                    │              │     │   :8082        │
-                    └──────┬───────┘     └───────────────┘
-                           │
-                    ┌──────▼───────┐     ┌───────────────┐
-                    │    Kafka     │     │ User Service   │
-                    │   (Events)   │     │   :8081        │
-                    └──────────────┘     └───────────────┘
-                                         ┌───────────────┐
-                                         │ Order Service  │
-                                         │   :8085        │
-                                         └───────────────┘
+```mermaid
+graph TD
+    Frontend["Frontend\n Next.js :3000"] -->|REST| PaymentService["Payment Service\n :8083"]
+
+    PaymentService -->|validate QR| QRService["QR Service\n :8084"]
+    PaymentService -->|deduct / refund| WalletService["Wallet Service\n :8082"]
+    PaymentService -->|validate user| UserService["User Service\n :8081"]
+    PaymentService -->|publish events| Kafka["Kafka"]
+
+    Kafka -->|qr.code.generated| PaymentService
+    Kafka -->|payment.created| QRService
+    Kafka -->|payment.processed| WalletService
+
+    UserService -->|get wallet| WalletService
+    Frontend -->|orders| OrderService["Order Service\n :8085"]
+
+    subgraph infra [Infrastructure]
+        PostgreSQL["PostgreSQL 16"]
+        Kafka
+        GrafanaAlloy["Grafana Alloy"]
+    end
+
+    PaymentService --- PostgreSQL
+    QRService --- PostgreSQL
+    WalletService --- PostgreSQL
+    UserService --- PostgreSQL
+    OrderService --- PostgreSQL
+
+    GrafanaAlloy -->|metrics| Prometheus
+    GrafanaAlloy -->|logs| Loki
+    GrafanaAlloy -->|traces| Tempo
 ```
 
 ## Tech Stack
@@ -50,11 +62,51 @@ A full-stack QR code payment system built with microservices architecture, featu
 
 ## Payment Flow
 
-```
-1. Customer initiates payment       → payment-service creates PENDING payment
-2. QR code generated asynchronously → Kafka event → qr-service generates QR → READY status
-3. Merchant scans QR code           → payment-service validates QR, deducts wallet → COMPLETED
-4. (Optional) Refund                → payment-service credits wallet → REFUNDED
+```mermaid
+sequenceDiagram
+    actor Customer
+    actor Merchant
+    participant PS as Payment Service
+    participant QR as QR Service
+    participant K as Kafka
+    participant WS as Wallet Service
+
+    Customer->>PS: 1. POST /initiate
+    PS->>K: PaymentCreatedEvent
+    PS-->>Customer: transactionId (PENDING)
+
+    loop Poll for QR code
+        Customer->>PS: GET /{id}/status
+        PS-->>Customer: status: PENDING
+    end
+
+    K->>QR: payment.created
+    QR->>K: QRCodeGeneratedEvent
+    K->>PS: qr.code.generated
+    Note over PS: Status: READY
+
+    Customer->>PS: GET /{id}/status
+    PS-->>Customer: status: READY + qrCode
+
+    Customer-->>Merchant: Show QR code
+    Merchant->>PS: 2. POST /{id}/process (scan QR)
+    PS->>QR: Validate QR code
+    QR-->>PS: valid + ACTIVE
+    PS->>WS: Deduct wallet
+    WS-->>PS: success
+    PS-->>Merchant: COMPLETED
+
+    loop Poll for payment result
+        Customer->>PS: GET /{id}/status
+        PS-->>Customer: status: COMPLETED
+    end
+
+    opt Refund
+        Merchant->>PS: 3. POST /{id}/refund
+        PS->>WS: Credit wallet
+        WS-->>PS: success
+        PS-->>Merchant: REFUNDED
+    end
 ```
 
 ### Key Design Decisions
