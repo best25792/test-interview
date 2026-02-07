@@ -96,10 +96,6 @@ sequenceDiagram
     WS-->>PS: success
     PS-->>Merchant: COMPLETED
 
-    loop Poll for payment result
-        Customer->>PS: GET /{id}/status
-        PS-->>Customer: status: COMPLETED
-    end
 
     opt Refund
         Merchant->>PS: 3. POST /{id}/refund
