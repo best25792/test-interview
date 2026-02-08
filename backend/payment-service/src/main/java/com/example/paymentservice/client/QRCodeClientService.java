@@ -4,7 +4,10 @@ import com.example.paymentservice.dto.request.CreateQRCodeRequest;
 import com.example.paymentservice.dto.request.ValidateQRCodeRequest;
 import com.example.paymentservice.dto.response.QRCodeResponse;
 import com.example.paymentservice.exception.QRCodeNotFoundException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -13,26 +16,43 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.Set;
+
 /**
- * Service that uses RestClient to call QR Code Service
+ * REST client for QR Code Service.
+ *
+ * Protected by Resilience4j Circuit Breaker + Retry:
+ * - Transient failures (network blips, 503) are retried automatically
+ * - Persistent failures trigger circuit breaker to fail fast
+ * - QRCodeNotFoundException (404) is NOT retried or counted as failure
  */
 @Service
 @Slf4j
 public class QRCodeClientService {
 
     private final RestClient restClient;
+    private final CircuitBreaker circuitBreaker;
+    private final Retry retry;
 
-    public QRCodeClientService(RestClient.Builder restClientBuilder, 
-                               @Value("${qr.code.service.url:http://localhost:8084}") String baseUrl) {
-        this.restClient = restClientBuilder
-                .baseUrl(baseUrl)
-                .build();
+    public QRCodeClientService(RestClient.Builder restClientBuilder,
+                               @Value("${qr.code.service.url:http://localhost:8084}") String baseUrl,
+                               @Qualifier("qrCodeServiceCircuitBreaker") CircuitBreaker circuitBreaker,
+                               @Qualifier("qrCodeServiceRetry") Retry retry) {
+        this.restClient = restClientBuilder.baseUrl(baseUrl).build();
+        this.circuitBreaker = circuitBreaker;
+        this.retry = retry;
     }
 
     /**
      * Create QR code for a payment using RestClient
      */
     public QRCodeResponse createQRCode(Long paymentId, String customerId) {
+        return ResilientCall.execute(circuitBreaker, retry, () -> {
+            return doCreateQRCode(paymentId, customerId);
+        }, Set.of());
+    }
+
+    private QRCodeResponse doCreateQRCode(Long paymentId, String customerId) {
         try {
             CreateQRCodeRequest request = new CreateQRCodeRequest(paymentId, customerId);
             QRCodeResponse response = restClient.post()
@@ -41,12 +61,12 @@ public class QRCodeClientService {
                     .body(request)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        log.warn("QR code creation failed with client error: status={}, paymentId={}", 
+                        log.warn("QR code creation failed with client error: status={}, paymentId={}",
                                 res.getStatusCode(), paymentId);
                         throw new RuntimeException("QR code creation failed: " + res.getStatusCode());
                     })
                     .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        log.error("QR code service returned server error: status={}, paymentId={}", 
+                        log.error("QR code service returned server error: status={}, paymentId={}",
                                 res.getStatusCode(), paymentId);
                         throw new RuntimeException("QR code service error: " + res.getStatusCode());
                     })
@@ -65,6 +85,12 @@ public class QRCodeClientService {
      * Get QR code by ID using RestClient
      */
     public QRCodeResponse getQRCode(Long id) {
+        return ResilientCall.execute(circuitBreaker, retry, () -> {
+            return doGetQRCode(id);
+        }, Set.of(QRCodeNotFoundException.class));
+    }
+
+    private QRCodeResponse doGetQRCode(Long id) {
         try {
             QRCodeResponse response = restClient.get()
                     .uri("/api/v1/qrcodes/{id}", id)
@@ -74,12 +100,12 @@ public class QRCodeClientService {
                         throw new QRCodeNotFoundException("QR code not found with id: " + id);
                     })
                     .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        log.error("QR code service returned server error: status={}, id={}", 
+                        log.error("QR code service returned server error: status={}, id={}",
                                 res.getStatusCode(), id);
                         throw new RuntimeException("QR code service error: " + res.getStatusCode());
                     })
                     .body(QRCodeResponse.class);
-            
+
             return response;
         } catch (QRCodeNotFoundException e) {
             throw e;
@@ -93,6 +119,12 @@ public class QRCodeClientService {
      * Validate QR code using RestClient
      */
     public QRCodeResponse validateQRCode(String code) {
+        return ResilientCall.execute(circuitBreaker, retry, () -> {
+            return doValidateQRCode(code);
+        }, Set.of());
+    }
+
+    private QRCodeResponse doValidateQRCode(String code) {
         try {
             ValidateQRCodeRequest request = new ValidateQRCodeRequest(code);
             QRCodeResponse response = restClient.post()
@@ -101,17 +133,17 @@ public class QRCodeClientService {
                     .body(request)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        log.warn("QR code validation failed with client error: status={}, code={}", 
+                        log.warn("QR code validation failed with client error: status={}, code={}",
                                 res.getStatusCode(), code);
                         throw new RuntimeException("QR code validation failed: " + res.getStatusCode());
                     })
                     .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        log.error("QR code service returned server error: status={}, code={}", 
+                        log.error("QR code service returned server error: status={}, code={}",
                                 res.getStatusCode(), code);
                         throw new RuntimeException("QR code service error: " + res.getStatusCode());
                     })
                     .body(QRCodeResponse.class);
-            
+
             return response;
         } catch (RestClientException e) {
             log.error("Error validating QR code: {}", code, e);

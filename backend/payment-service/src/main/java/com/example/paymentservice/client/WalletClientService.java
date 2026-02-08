@@ -1,29 +1,46 @@
 package com.example.paymentservice.client;
 
-import lombok.RequiredArgsConstructor;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.retry.Retry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 /**
  * REST client for Wallet Service.
  * Provides atomic wallet operations (deduct, top-up) without hold/capture flow.
+ *
+ * Protected by Resilience4j Circuit Breaker + Retry:
+ * - Transient failures (network blips, 503) are retried automatically
+ * - Persistent failures trigger circuit breaker to fail fast
+ * - Business errors (InsufficientBalance) are NOT retried or counted as failures
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class WalletClientService {
 
     private final RestClient.Builder restClientBuilder;
-    
+    private final CircuitBreaker circuitBreaker;
+    private final Retry retry;
+
     @Value("${wallet.service.url:http://localhost:8082}")
     private String baseUrl;
-    
+
     private RestClient restClient;
+
+    public WalletClientService(RestClient.Builder restClientBuilder,
+                               @Qualifier("walletServiceCircuitBreaker") CircuitBreaker circuitBreaker,
+                               @Qualifier("walletServiceRetry") Retry retry) {
+        this.restClientBuilder = restClientBuilder;
+        this.circuitBreaker = circuitBreaker;
+        this.retry = retry;
+    }
 
     private RestClient getRestClient() {
         if (restClient == null) {
@@ -35,8 +52,15 @@ public class WalletClientService {
     /**
      * Deduct amount from user wallet (atomic check + deduct).
      * Throws InsufficientBalanceException if balance is not enough.
+     * Throws ServiceUnavailableException if circuit breaker is open.
      */
     public void deductFromWallet(Long userId, BigDecimal amount) {
+        ResilientCall.executeRunnable(circuitBreaker, retry, () -> {
+            doDeductFromWallet(userId, amount);
+        }, Set.of(InsufficientBalanceException.class));
+    }
+
+    private void doDeductFromWallet(Long userId, BigDecimal amount) {
         try {
             getRestClient()
                     .post()
@@ -65,8 +89,15 @@ public class WalletClientService {
 
     /**
      * Add amount to wallet (for refunds, top-ups, etc.)
+     * Throws ServiceUnavailableException if circuit breaker is open.
      */
     public void addToWallet(Long userId, BigDecimal amount, String reason) {
+        ResilientCall.executeRunnable(circuitBreaker, retry, () -> {
+            doAddToWallet(userId, amount, reason);
+        }, Set.of());
+    }
+
+    private void doAddToWallet(Long userId, BigDecimal amount, String reason) {
         try {
             getRestClient()
                     .post()

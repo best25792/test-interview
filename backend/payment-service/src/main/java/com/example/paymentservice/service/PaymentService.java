@@ -1,6 +1,7 @@
 package com.example.paymentservice.service;
 
 import com.example.paymentservice.client.QRCodeClientService;
+import com.example.paymentservice.client.ServiceUnavailableException;
 import com.example.paymentservice.client.UserClientService;
 import com.example.paymentservice.client.WalletClientService;
 import com.example.paymentservice.dto.request.CreatePaymentRequest;
@@ -70,11 +71,17 @@ public class PaymentService {
             }
         }
 
-        // 2. Validate user conditions (HTTP call - OUTSIDE transaction)
-        if (!userClientService.validateUserConditions(request.getUserId())) {
+        // 2. Validate user conditions (HTTP call - OUTSIDE transaction, protected by circuit breaker)
+        try {
+            if (!userClientService.validateUserConditions(request.getUserId())) {
+                throw new PaymentException(
+                        PaymentErrorCode.USER_VALIDATION_FAILED.name(),
+                        "User does not meet business conditions");
+            }
+        } catch (ServiceUnavailableException e) {
             throw new PaymentException(
-                    PaymentErrorCode.USER_VALIDATION_FAILED.name(),
-                    "User does not meet business conditions");
+                    PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
+                    "User service is temporarily unavailable. Please retry later.");
         }
 
         // 3. Short transaction: save payment + outbox event
@@ -190,10 +197,14 @@ public class PaymentService {
                             ". Payment must be in READY status (QR code must be generated first).");
         }
 
-        // 3. Validate QR code (HTTP call - OUTSIDE transaction)
+        // 3. Validate QR code (HTTP call - OUTSIDE transaction, protected by circuit breaker)
         QRCodeResponse qrCodeResponse;
         try {
             qrCodeResponse = qrCodeClientService.validateQRCode(request.getQrCode());
+        } catch (ServiceUnavailableException e) {
+            throw new PaymentException(
+                    PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
+                    "QR code service is temporarily unavailable. Please retry later.");
         } catch (Exception e) {
             log.error("Failed to validate QR code via RestClient: qrCode={}", request.getQrCode(), e);
             throw new PaymentException(
@@ -213,10 +224,14 @@ public class PaymentService {
                     "QR code is not active. Status: " + qrCodeResponse.getStatus());
         }
 
-        // 4. Deduct from wallet (HTTP call - OUTSIDE transaction, single round-trip)
+        // 4. Deduct from wallet (HTTP call - OUTSIDE transaction, protected by circuit breaker)
         Long userId = Long.parseLong(payment.getCustomerId());
         try {
             walletClientService.deductFromWallet(userId, request.getAmount());
+        } catch (ServiceUnavailableException e) {
+            throw new PaymentException(
+                    PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
+                    "Wallet service is temporarily unavailable. Please retry later.");
         } catch (WalletClientService.InsufficientBalanceException e) {
             throw new PaymentException(
                     PaymentErrorCode.INSUFFICIENT_BALANCE.name(),
@@ -312,11 +327,15 @@ public class PaymentService {
                     "Refund amount cannot exceed payment amount");
         }
 
-        // 2. Refund to wallet (HTTP call - OUTSIDE transaction)
+        // 2. Refund to wallet (HTTP call - OUTSIDE transaction, protected by circuit breaker)
         Long userId = Long.parseLong(payment.getCustomerId());
         try {
             walletClientService.addToWallet(userId, request.getAmount(),
                     "Refund for payment: " + paymentId);
+        } catch (ServiceUnavailableException e) {
+            throw new PaymentException(
+                    PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
+                    "Wallet service is temporarily unavailable. Please retry later.");
         } catch (WalletClientService.WalletServiceException e) {
             throw new PaymentException(
                     PaymentErrorCode.WALLET_SERVICE_ERROR.name(),
