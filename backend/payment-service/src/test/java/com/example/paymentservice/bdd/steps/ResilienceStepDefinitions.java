@@ -1,8 +1,9 @@
 package com.example.paymentservice.bdd.steps;
 
-import com.example.paymentservice.client.ServiceUnavailableException;
 import com.example.paymentservice.client.UserClientService;
 import com.example.paymentservice.client.WalletClientService;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.cucumber.java.en.Given;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -16,7 +17,7 @@ import static org.mockito.Mockito.doThrow;
  *
  * Since client services are mocked via @MockitoBean, these steps simulate
  * what happens when the circuit breaker is OPEN: the mocked client throws
- * ServiceUnavailableException, and we verify that PaymentService returns
+ * CallNotPermittedException, and we verify that PaymentService returns
  * structured SERVICE_UNAVAILABLE error codes.
  */
 public class ResilienceStepDefinitions {
@@ -29,17 +30,15 @@ public class ResilienceStepDefinitions {
 
     @Given("the wallet service circuit breaker is open")
     public void walletServiceCircuitBreakerIsOpen() {
-        doThrow(new ServiceUnavailableException(
-                "Service walletService is currently unavailable (circuit open)",
-                new RuntimeException("CB open")))
+        doThrow(CallNotPermittedException.createCallNotPermittedException(
+                CircuitBreaker.ofDefaults("walletService")))
                 .when(walletClientService).deductFromWallet(any(Long.class), any(BigDecimal.class));
     }
 
     @Given("the user service circuit breaker is open")
     public void userServiceCircuitBreakerIsOpen() {
-        doThrow(new ServiceUnavailableException(
-                "Service userService is currently unavailable (circuit open)",
-                new RuntimeException("CB open")))
+        doThrow(CallNotPermittedException.createCallNotPermittedException(
+                CircuitBreaker.ofDefaults("userService")))
                 .when(userClientService).validateUserConditions(any(Long.class));
     }
 }

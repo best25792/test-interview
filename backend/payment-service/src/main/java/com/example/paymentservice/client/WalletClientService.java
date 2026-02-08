@@ -1,45 +1,37 @@
 package com.example.paymentservice.client;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.util.Set;
 
 /**
  * REST client for Wallet Service.
  * Provides atomic wallet operations (deduct, top-up) without hold/capture flow.
  *
- * Protected by Resilience4j Circuit Breaker + Retry:
- * - Transient failures (network blips, 503) are retried automatically
- * - Persistent failures trigger circuit breaker to fail fast
- * - Business errors (InsufficientBalance) are NOT retried or counted as failures
+ * Protected by Resilience4j annotations:
+ * - @CircuitBreaker: opens after 50% failure rate, fails fast with CallNotPermittedException
+ * - @Retry: retries transient failures up to 3 times with 500ms backoff
+ * - InsufficientBalanceException is ignored by both (business error, not infrastructure)
  */
 @Service
 @Slf4j
 public class WalletClientService {
 
     private final RestClient.Builder restClientBuilder;
-    private final CircuitBreaker circuitBreaker;
-    private final Retry retry;
 
     @Value("${wallet.service.url:http://localhost:8082}")
     private String baseUrl;
 
     private RestClient restClient;
 
-    public WalletClientService(RestClient.Builder restClientBuilder,
-                               @Qualifier("walletServiceCircuitBreaker") CircuitBreaker circuitBreaker,
-                               @Qualifier("walletServiceRetry") Retry retry) {
+    public WalletClientService(RestClient.Builder restClientBuilder) {
         this.restClientBuilder = restClientBuilder;
-        this.circuitBreaker = circuitBreaker;
-        this.retry = retry;
     }
 
     private RestClient getRestClient() {
@@ -51,16 +43,12 @@ public class WalletClientService {
 
     /**
      * Deduct amount from user wallet (atomic check + deduct).
-     * Throws InsufficientBalanceException if balance is not enough.
-     * Throws ServiceUnavailableException if circuit breaker is open.
+     * Throws InsufficientBalanceException if balance is not enough (not retried).
+     * Throws CallNotPermittedException if circuit breaker is open.
      */
+    @CircuitBreaker(name = "walletService")
+    @Retry(name = "walletService")
     public void deductFromWallet(Long userId, BigDecimal amount) {
-        ResilientCall.executeRunnable(circuitBreaker, retry, () -> {
-            doDeductFromWallet(userId, amount);
-        }, Set.of(InsufficientBalanceException.class));
-    }
-
-    private void doDeductFromWallet(Long userId, BigDecimal amount) {
         try {
             getRestClient()
                     .post()
@@ -89,15 +77,11 @@ public class WalletClientService {
 
     /**
      * Add amount to wallet (for refunds, top-ups, etc.)
-     * Throws ServiceUnavailableException if circuit breaker is open.
+     * Throws CallNotPermittedException if circuit breaker is open.
      */
+    @CircuitBreaker(name = "walletService")
+    @Retry(name = "walletService")
     public void addToWallet(Long userId, BigDecimal amount, String reason) {
-        ResilientCall.executeRunnable(circuitBreaker, retry, () -> {
-            doAddToWallet(userId, amount, reason);
-        }, Set.of());
-    }
-
-    private void doAddToWallet(Long userId, BigDecimal amount, String reason) {
         try {
             getRestClient()
                     .post()

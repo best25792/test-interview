@@ -1,43 +1,35 @@
 package com.example.paymentservice.client;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.util.Set;
-
 /**
  * REST client for User Service.
  *
- * Protected by Resilience4j Circuit Breaker + Retry:
- * - Transient failures (network blips, 503) are retried automatically
- * - Persistent failures trigger circuit breaker to fail fast
+ * Protected by Resilience4j annotations:
+ * - @CircuitBreaker: opens after 50% failure rate, fails fast with CallNotPermittedException
+ * - @Retry: retries transient failures up to 3 times with 500ms backoff
  */
 @Service
 @Slf4j
 public class UserClientService {
 
     private final RestClient.Builder restClientBuilder;
-    private final CircuitBreaker circuitBreaker;
-    private final Retry retry;
 
     @Value("${user.service.url:http://localhost:8081}")
     private String baseUrl;
 
     private RestClient restClient;
 
-    public UserClientService(RestClient.Builder restClientBuilder,
-                             @Qualifier("userServiceCircuitBreaker") CircuitBreaker circuitBreaker,
-                             @Qualifier("userServiceRetry") Retry retry) {
+    public UserClientService(RestClient.Builder restClientBuilder) {
         this.restClientBuilder = restClientBuilder;
-        this.circuitBreaker = circuitBreaker;
-        this.retry = retry;
     }
 
     private RestClient getRestClient() {
@@ -50,13 +42,9 @@ public class UserClientService {
     /**
      * Get user by ID
      */
+    @CircuitBreaker(name = "userService")
+    @Retry(name = "userService")
     public UserResponse getUser(Long userId) {
-        return ResilientCall.execute(circuitBreaker, retry, () -> {
-            return doGetUser(userId);
-        }, Set.of());
-    }
-
-    private UserResponse doGetUser(Long userId) {
         try {
             return getRestClient()
                     .get()
@@ -77,13 +65,9 @@ public class UserClientService {
     /**
      * Get wallet from User Service (which calls Wallet Service)
      */
+    @CircuitBreaker(name = "userService")
+    @Retry(name = "userService")
     public WalletResponse getWallet(Long userId) {
-        return ResilientCall.execute(circuitBreaker, retry, () -> {
-            return doGetWallet(userId);
-        }, Set.of());
-    }
-
-    private WalletResponse doGetWallet(Long userId) {
         try {
             return getRestClient()
                     .get()
@@ -103,7 +87,9 @@ public class UserClientService {
 
     /**
      * Validate user conditions (user active and wallet active).
-     * Circuit breaker protects both underlying HTTP calls.
+     * Not annotated with @CircuitBreaker — the underlying getUser() and getWallet()
+     * calls are already protected. This method catches CallNotPermittedException
+     * and re-throws it so PaymentService can handle it.
      */
     public boolean validateUserConditions(Long userId) {
         try {
@@ -120,7 +106,7 @@ public class UserClientService {
             }
 
             return true;
-        } catch (ServiceUnavailableException e) {
+        } catch (CallNotPermittedException e) {
             // Circuit breaker is open — propagate so caller can return 503
             throw e;
         } catch (Exception e) {

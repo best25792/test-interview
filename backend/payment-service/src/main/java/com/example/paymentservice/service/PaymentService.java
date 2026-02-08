@@ -1,9 +1,9 @@
 package com.example.paymentservice.service;
 
 import com.example.paymentservice.client.QRCodeClientService;
-import com.example.paymentservice.client.ServiceUnavailableException;
 import com.example.paymentservice.client.UserClientService;
 import com.example.paymentservice.client.WalletClientService;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import com.example.paymentservice.dto.request.CreatePaymentRequest;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
@@ -78,7 +78,7 @@ public class PaymentService {
                         PaymentErrorCode.USER_VALIDATION_FAILED.name(),
                         "User does not meet business conditions");
             }
-        } catch (ServiceUnavailableException e) {
+        } catch (CallNotPermittedException e) {
             throw new PaymentException(
                     PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
                     "User service is temporarily unavailable. Please retry later.");
@@ -201,7 +201,7 @@ public class PaymentService {
         QRCodeResponse qrCodeResponse;
         try {
             qrCodeResponse = qrCodeClientService.validateQRCode(request.getQrCode());
-        } catch (ServiceUnavailableException e) {
+        } catch (CallNotPermittedException e) {
             throw new PaymentException(
                     PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
                     "QR code service is temporarily unavailable. Please retry later.");
@@ -228,7 +228,7 @@ public class PaymentService {
         Long userId = Long.parseLong(payment.getCustomerId());
         try {
             walletClientService.deductFromWallet(userId, request.getAmount());
-        } catch (ServiceUnavailableException e) {
+        } catch (CallNotPermittedException e) {
             throw new PaymentException(
                     PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
                     "Wallet service is temporarily unavailable. Please retry later.");
@@ -332,7 +332,7 @@ public class PaymentService {
         try {
             walletClientService.addToWallet(userId, request.getAmount(),
                     "Refund for payment: " + paymentId);
-        } catch (ServiceUnavailableException e) {
+        } catch (CallNotPermittedException e) {
             throw new PaymentException(
                     PaymentErrorCode.SERVICE_UNAVAILABLE.name(),
                     "Wallet service is temporarily unavailable. Please retry later.");
