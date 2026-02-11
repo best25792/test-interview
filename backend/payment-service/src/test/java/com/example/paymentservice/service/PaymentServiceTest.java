@@ -3,15 +3,16 @@ package com.example.paymentservice.service;
 import com.example.paymentservice.client.QRCodeClientService;
 import com.example.paymentservice.client.UserClientService;
 import com.example.paymentservice.client.WalletClientService;
+import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
 import com.example.paymentservice.dto.request.RefundPaymentRequest;
-import com.example.paymentservice.dto.response.QRCodeResponse;
 import com.example.paymentservice.entity.Payment;
 import com.example.paymentservice.entity.PaymentErrorCode;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.PaymentException;
 import com.example.paymentservice.exception.PaymentNotFoundException;
+import com.example.paymentservice.mapper.PaymentMapper;
 import com.example.paymentservice.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class PaymentServiceTest {
     private PaymentRepository paymentRepository;
 
     @Mock
+    private PaymentMapper paymentMapper;
+
+    @Mock
     private QRCodeClientService qrCodeClientService;
 
     @Mock
@@ -52,7 +56,8 @@ class PaymentServiceTest {
     private Long userId = 1L;
     private Long paymentId = 100L;
     private Payment payment;
-    private QRCodeResponse qrCodeResponse;
+    private com.example.paymentservice.domain.model.Payment domainPayment;
+    private QRCode domainQRCode;
 
     @BeforeEach
     void setUp() {
@@ -64,13 +69,40 @@ class PaymentServiceTest {
                 .customerId(userId.toString())
                 .build();
 
-        qrCodeResponse = QRCodeResponse.builder()
+        domainPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(payment.getAmount())
+                .currency(payment.getCurrency())
+                .status(payment.getStatus())
+                .merchantId(payment.getMerchantId())
+                .customerId(payment.getCustomerId())
+                .description(payment.getDescription())
+                .idempotencyKey(payment.getIdempotencyKey())
+                .errorCode(payment.getErrorCode())
+                .errorMessage(payment.getErrorMessage())
+                .createdAt(payment.getCreatedAt())
+                .updatedAt(payment.getUpdatedAt())
+                .build();
+
+        domainQRCode = QRCode.builder()
                 .id(1L)
                 .code("PAYMENT_100_1234567890_ABCDEF123456")
                 .paymentId(paymentId)
                 .status("ACTIVE")
                 .expiresAt(LocalDateTime.now().plusMinutes(15))
+                .createdAt(LocalDateTime.now())
                 .build();
+
+        lenient().when(paymentMapper.toDomain(any(Payment.class))).thenAnswer(inv -> {
+            Payment e = inv.getArgument(0);
+            return com.example.paymentservice.domain.model.Payment.builder()
+                    .id(e.getId()).amount(e.getAmount()).currency(e.getCurrency())
+                    .status(e.getStatus()).merchantId(e.getMerchantId()).customerId(e.getCustomerId())
+                    .description(e.getDescription()).idempotencyKey(e.getIdempotencyKey())
+                    .errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage())
+                    .createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
+                    .build();
+        });
     }
 
     @Test
@@ -151,7 +183,7 @@ class PaymentServiceTest {
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
 
         // When
-        Payment result = paymentService.getPaymentById(paymentId);
+        com.example.paymentservice.domain.model.Payment result = paymentService.getPaymentById(paymentId);
 
         // Then
         assertNotNull(result);
@@ -184,11 +216,11 @@ class PaymentServiceTest {
         request.setDescription("Test payment");
 
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
-        when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(qrCodeResponse);
+        when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(domainQRCode);
         when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
 
         // When
-        Payment result = paymentService.processPayment(paymentId, request, null);
+        com.example.paymentservice.domain.model.Payment result = paymentService.processPayment(paymentId, request, null);
 
         // Then
         assertNotNull(result);
@@ -207,7 +239,7 @@ class PaymentServiceTest {
         request.setMerchantId("MERCHANT_001");
 
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
-        when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(qrCodeResponse);
+        when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(domainQRCode);
         doThrow(new WalletClientService.InsufficientBalanceException("Insufficient balance"))
                 .when(walletClientService).deductFromWallet(userId, request.getAmount());
 
@@ -253,7 +285,7 @@ class PaymentServiceTest {
         when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
 
         // When
-        Payment result = paymentService.refundPayment(paymentId, request, null);
+        com.example.paymentservice.domain.model.Payment result = paymentService.refundPayment(paymentId, request, null);
 
         // Then
         assertNotNull(result);
@@ -305,7 +337,7 @@ class PaymentServiceTest {
         when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
 
         // When
-        Payment result = paymentService.cancelPayment(paymentId, "No longer needed");
+        com.example.paymentservice.domain.model.Payment result = paymentService.cancelPayment(paymentId, "No longer needed");
 
         // Then
         assertNotNull(result);
@@ -320,7 +352,7 @@ class PaymentServiceTest {
         when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
 
         // When
-        Payment result = paymentService.cancelPayment(paymentId, "Changed mind");
+        com.example.paymentservice.domain.model.Payment result = paymentService.cancelPayment(paymentId, "Changed mind");
 
         // Then
         assertNotNull(result);

@@ -1,113 +1,65 @@
 package com.example.paymentservice.client;
 
+import com.example.paymentservice.client.api.WalletApi;
+import com.example.paymentservice.client.dto.DeductRequest;
+import com.example.paymentservice.client.dto.TopUpRequest;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
 
 /**
- * REST client for Wallet Service.
- * Provides atomic wallet operations (deduct, top-up) without hold/capture flow.
- *
- * Protected by Resilience4j annotations:
- * - @CircuitBreaker: opens after 50% failure rate, fails fast with CallNotPermittedException
- * - @Retry: retries transient failures up to 3 times with 500ms backoff
- * - InsufficientBalanceException is ignored by both (business error, not infrastructure)
+ * Wrapper around WalletApi (HTTP Service client). Adds Resilience4j and
+ * maps RestClientResponseException to domain exceptions.
  */
 @Service
 @Slf4j
 public class WalletClientService {
 
-    private final RestClient.Builder restClientBuilder;
+    private final WalletApi walletApi;
 
-    @Value("${wallet.service.url:http://localhost:8082}")
-    private String baseUrl;
-
-    private RestClient restClient;
-
-    public WalletClientService(RestClient.Builder restClientBuilder) {
-        this.restClientBuilder = restClientBuilder;
+    public WalletClientService(WalletApi walletApi) {
+        this.walletApi = walletApi;
     }
 
-    private RestClient getRestClient() {
-        if (restClient == null) {
-            restClient = restClientBuilder.baseUrl(baseUrl).build();
-        }
-        return restClient;
-    }
-
-    /**
-     * Deduct amount from user wallet (atomic check + deduct).
-     * Throws InsufficientBalanceException if balance is not enough (not retried).
-     * Throws CallNotPermittedException if circuit breaker is open.
-     */
     @CircuitBreaker(name = "walletService")
     @Retry(name = "walletService")
     public void deductFromWallet(Long userId, BigDecimal amount) {
         try {
-            getRestClient()
-                    .post()
-                    .uri("/api/v1/wallets/users/{userId}/deduct", userId)
-                    .body(new DeductRequest(amount))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
-                        log.error("Wallet deduction failed for userId: {}, amount: {}, status: {}",
-                                userId, amount, res.getStatusCode());
-                        throw new InsufficientBalanceException(
-                                "Wallet deduction failed for userId: " + userId + ", status: " + res.getStatusCode());
-                    })
-                    .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
-                        log.error("Wallet service error for userId: {}, status: {}", userId, res.getStatusCode());
-                        throw new WalletServiceException(
-                                "Wallet service error: " + res.getStatusCode());
-                    })
-                    .toBodilessEntity();
-        } catch (InsufficientBalanceException | WalletServiceException e) {
-            throw e;
-        } catch (Exception e) {
+            walletApi.deduct(userId, new DeductRequest(amount));
+        } catch (HttpClientErrorException e) {
+            log.error("Wallet deduction failed for userId: {}, amount: {}, status: {}",
+                    userId, amount, e.getStatusCode());
+            throw new InsufficientBalanceException(
+                    "Wallet deduction failed for userId: " + userId + ", status: " + e.getStatusCode());
+        } catch (HttpServerErrorException e) {
+            log.error("Wallet service error for userId: {}, status: {}", userId, e.getStatusCode());
+            throw new WalletServiceException("Wallet service error: " + e.getStatusCode());
+        } catch (RestClientResponseException e) {
             log.error("Error calling Wallet Service to deduct, userId: {}, amount: {}", userId, amount, e);
             throw new WalletServiceException("Failed to deduct from wallet", e);
         }
     }
 
-    /**
-     * Add amount to wallet (for refunds, top-ups, etc.)
-     * Throws CallNotPermittedException if circuit breaker is open.
-     */
     @CircuitBreaker(name = "walletService")
     @Retry(name = "walletService")
     public void addToWallet(Long userId, BigDecimal amount, String reason) {
         try {
-            getRestClient()
-                    .post()
-                    .uri("/api/v1/wallets/users/{userId}/topup", userId)
-                    .body(new TopUpRequest(amount))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        log.error("Failed to add to wallet, userId: {}, amount: {}, status: {}",
-                                userId, amount, res.getStatusCode());
-                        throw new WalletServiceException(
-                                "Failed to add to wallet: " + res.getStatusCode());
-                    })
-                    .toBodilessEntity();
-        } catch (WalletServiceException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Error calling Wallet Service to add to wallet, userId: {}, amount: {}", userId, amount, e);
-            throw new WalletServiceException("Failed to add to wallet", e);
+            walletApi.topUp(userId, new TopUpRequest(amount));
+        } catch (RestClientResponseException e) {
+            HttpStatusCode status = e.getStatusCode();
+            log.error("Failed to add to wallet, userId: {}, amount: {}, status: {}",
+                    userId, amount, status);
+            throw new WalletServiceException("Failed to add to wallet: " + status, e);
         }
     }
 
-    // DTOs
-    public record DeductRequest(BigDecimal amount) {}
-    public record TopUpRequest(BigDecimal amount) {}
-
-    // Exceptions
     public static class InsufficientBalanceException extends RuntimeException {
         public InsufficientBalanceException(String message) {
             super(message);

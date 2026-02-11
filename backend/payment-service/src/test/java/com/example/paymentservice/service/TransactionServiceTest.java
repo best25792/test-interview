@@ -1,8 +1,10 @@
 package com.example.paymentservice.service;
 
-import com.example.paymentservice.entity.Transaction;
+import com.example.paymentservice.domain.model.Transaction;
+import com.example.paymentservice.entity.TransactionStatus;
 import com.example.paymentservice.entity.TransactionType;
 import com.example.paymentservice.exception.PaymentNotFoundException;
+import com.example.paymentservice.mapper.TransactionMapper;
 import com.example.paymentservice.repository.PaymentRepository;
 import com.example.paymentservice.repository.TransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,29 +33,42 @@ class TransactionServiceTest {
     @Mock
     private PaymentRepository paymentRepository;
 
+    @Mock
+    private TransactionMapper transactionMapper;
+
     @InjectMocks
     private TransactionService transactionService;
 
     private Long transactionId = 1L;
     private Long paymentId = 100L;
-    private Transaction transaction;
+    private com.example.paymentservice.entity.Transaction transactionEntity;
+    private Transaction domainTransaction;
 
     @BeforeEach
     void setUp() {
-        transaction = Transaction.builder()
+        transactionEntity = com.example.paymentservice.entity.Transaction.builder()
                 .id(transactionId)
                 .paymentId(paymentId)
                 .type(TransactionType.PAYMENT)
                 .amount(new BigDecimal("50.00"))
-                .status(com.example.paymentservice.entity.TransactionStatus.SUCCESS)
+                .status(TransactionStatus.SUCCESS)
                 .timestamp(LocalDateTime.now())
                 .build();
+        domainTransaction = Transaction.builder()
+                .id(transactionId)
+                .paymentId(paymentId)
+                .type(TransactionType.PAYMENT)
+                .amount(new BigDecimal("50.00"))
+                .status(TransactionStatus.SUCCESS)
+                .timestamp(LocalDateTime.now())
+                .build();
+        lenient().when(transactionMapper.toDomain(any(com.example.paymentservice.entity.Transaction.class))).thenReturn(domainTransaction);
     }
 
     @Test
     void testGetTransactionById_Success() {
         // Given
-        when(transactionRepository.findById(transactionId)).thenReturn(Optional.of(transaction));
+        when(transactionRepository.findById(transactionId)).thenReturn(Optional.of(transactionEntity));
 
         // When
         Transaction result = transactionService.getTransactionById(transactionId);
@@ -80,8 +96,8 @@ class TransactionServiceTest {
     @Test
     void testGetAllTransactions() {
         // Given
-        List<Transaction> transactions = Arrays.asList(transaction);
-        when(transactionRepository.findAll()).thenReturn(transactions);
+        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
+        when(transactionRepository.findAll()).thenReturn(entities);
 
         // When
         List<Transaction> result = transactionService.getAllTransactions();
@@ -95,11 +111,11 @@ class TransactionServiceTest {
     @Test
     void testGetTransactionsByPaymentId_Success() {
         // Given
-        List<Transaction> transactions = Arrays.asList(transaction);
+        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(com.example.paymentservice.entity.Payment.builder()
                 .id(paymentId)
                 .build()));
-        when(transactionRepository.findByPaymentIdOrderByTimestampDesc(paymentId)).thenReturn(transactions);
+        when(transactionRepository.findByPaymentIdOrderByTimestampDesc(paymentId)).thenReturn(entities);
 
         // When
         List<Transaction> result = transactionService.getTransactionsByPaymentId(paymentId);
@@ -128,8 +144,8 @@ class TransactionServiceTest {
     @Test
     void testGetTransactionsByType() {
         // Given
-        List<Transaction> transactions = Arrays.asList(transaction);
-        when(transactionRepository.findByType(TransactionType.PAYMENT)).thenReturn(transactions);
+        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
+        when(transactionRepository.findByType(TransactionType.PAYMENT)).thenReturn(entities);
 
         // When
         List<Transaction> result = transactionService.getTransactionsByType(TransactionType.PAYMENT);

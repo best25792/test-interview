@@ -1,16 +1,17 @@
 package com.example.paymentservice.controller;
 
 import com.example.paymentservice.client.QRCodeClientService;
+import com.example.paymentservice.domain.model.Payment;
+import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.request.CreatePaymentRequest;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
 import com.example.paymentservice.dto.request.RefundPaymentRequest;
 import com.example.paymentservice.dto.response.InitiatePaymentResponse;
 import com.example.paymentservice.dto.response.PaymentResponse;
-import com.example.paymentservice.dto.response.QRCodeResponse;
-import com.example.paymentservice.entity.Payment;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.ErrorResponse;
+import com.example.paymentservice.mapper.PaymentMapper;
 import com.example.paymentservice.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,7 +27,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -36,6 +36,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final QRCodeClientService qrCodeClientService;
+    private final PaymentMapper paymentMapper;
 
     @Operation(
             summary = "Initiate a payment",
@@ -97,17 +98,12 @@ public class PaymentController {
     public ResponseEntity<List<PaymentResponse>> getAllPayments(
             @Parameter(description = "Filter by payment status")
             @RequestParam(required = false) PaymentStatus status) {
-        List<Payment> payments;
-        if (status != null) {
-            payments = paymentService.getPaymentsByStatus(status);
-        } else {
-            payments = paymentService.getAllPayments();
-        }
-        
+        List<Payment> payments = status != null
+                ? paymentService.getPaymentsByStatus(status)
+                : paymentService.getAllPayments();
         List<PaymentResponse> responses = payments.stream()
                 .map(this::mapToPaymentResponse)
-                .collect(Collectors.toList());
-        
+                .toList();
         return ResponseEntity.ok(responses);
     }
 
@@ -173,29 +169,15 @@ public class PaymentController {
     }
 
     private PaymentResponse mapToPaymentResponse(Payment payment) {
-        PaymentResponse.PaymentResponseBuilder builder = PaymentResponse.builder()
-                .id(payment.getId())
-                .amount(payment.getAmount())
-                .currency(payment.getCurrency())
-                .status(payment.getStatus())
-                .merchantId(payment.getMerchantId())
-                .customerId(payment.getCustomerId())
-                .description(payment.getDescription())
-                .createdAt(payment.getCreatedAt())
-                .updatedAt(payment.getUpdatedAt())
-                .errorCode(payment.getErrorCode())
-                .errorMessage(payment.getErrorMessage());
+        var qrCode = getQRCodeIfExists(payment.getId());
+        return paymentMapper.toResponse(payment, qrCode);
+    }
 
-        // Fetch QR code if exists
+    private QRCode getQRCodeIfExists(Long paymentId) {
         try {
-            QRCodeResponse qrCodeResponse = qrCodeClientService.getQRCode(payment.getId());
-            if (qrCodeResponse != null) {
-                builder.qrCode(qrCodeResponse);
-            }
+            return qrCodeClientService.getQRCode(paymentId);
         } catch (Exception e) {
-            // QR code might not exist, ignore
+            return null;
         }
-
-        return builder.build();
     }
 }

@@ -250,5 +250,6 @@ Open **Grafana** at http://localhost:3001 and use the **Explore** view to query 
 | `INVALID_PAYMENT_STATE` | Operation not allowed for current payment status |
 | `USER_VALIDATION_FAILED` | User is inactive or wallet is inactive |
 | `WALLET_SERVICE_ERROR` | Wallet service unavailable |
+| `SERVICE_UNAVAILABLE` | Downstream service unavailable or timed out (circuit open) |
 | `DUPLICATE_REQUEST` | Idempotency key already used |
 | `REFUND_EXCEEDS_AMOUNT` | Refund amount greater than payment amount |

@@ -1,105 +1,66 @@
 package com.example.paymentservice.client;
 
+import com.example.paymentservice.client.api.UserApi;
+import com.example.paymentservice.domain.model.User;
+import com.example.paymentservice.domain.model.Wallet;
+import com.example.paymentservice.mapper.UserMapper;
+import com.example.paymentservice.mapper.WalletMapper;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
- * REST client for User Service.
- *
- * Protected by Resilience4j annotations:
- * - @CircuitBreaker: opens after 50% failure rate, fails fast with CallNotPermittedException
- * - @Retry: retries transient failures up to 3 times with 500ms backoff
+ * Wrapper around UserApi (HTTP Service client). Returns domain objects;
+ * adds Resilience4j and validateUserConditions logic.
  */
 @Service
 @Slf4j
 public class UserClientService {
 
-    private final RestClient.Builder restClientBuilder;
+    private final UserApi userApi;
+    private final UserMapper userMapper;
+    private final WalletMapper walletMapper;
 
-    @Value("${user.service.url:http://localhost:8081}")
-    private String baseUrl;
-
-    private RestClient restClient;
-
-    public UserClientService(RestClient.Builder restClientBuilder) {
-        this.restClientBuilder = restClientBuilder;
+    public UserClientService(UserApi userApi, UserMapper userMapper, WalletMapper walletMapper) {
+        this.userApi = userApi;
+        this.userMapper = userMapper;
+        this.walletMapper = walletMapper;
     }
 
-    private RestClient getRestClient() {
-        if (restClient == null) {
-            restClient = restClientBuilder.baseUrl(baseUrl).build();
-        }
-        return restClient;
-    }
-
-    /**
-     * Get user by ID
-     */
     @CircuitBreaker(name = "userService")
     @Retry(name = "userService")
-    public UserResponse getUser(Long userId) {
+    public User getUser(Long userId) {
         try {
-            return getRestClient()
-                    .get()
-                    .uri("/api/v1/users/{id}", userId)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        log.error("Failed to get user, userId: {}, status: {}",
-                                userId, res.getStatusCode());
-                        throw new RuntimeException("Failed to get user: " + res.getStatusCode());
-                    })
-                    .body(new ParameterizedTypeReference<UserResponse>() {});
-        } catch (Exception e) {
-            log.error("Error calling User Service for user, userId: {}", userId, e);
-            throw new RuntimeException("Failed to get user", e);
+            return userMapper.toDomain(userApi.getUser(userId));
+        } catch (RestClientResponseException e) {
+            log.error("Failed to get user, userId: {}, status: {}", userId, e.getStatusCode(), e);
+            throw new RuntimeException("Failed to get user: " + e.getStatusCode(), e);
         }
     }
 
-    /**
-     * Get wallet from User Service (which calls Wallet Service)
-     */
     @CircuitBreaker(name = "userService")
     @Retry(name = "userService")
-    public WalletResponse getWallet(Long userId) {
+    public Wallet getWallet(Long userId) {
         try {
-            return getRestClient()
-                    .get()
-                    .uri("/api/v1/users/{id}/wallet", userId)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (req, res) -> {
-                        log.error("Failed to get wallet, userId: {}, status: {}",
-                                userId, res.getStatusCode());
-                        throw new RuntimeException("Failed to get wallet: " + res.getStatusCode());
-                    })
-                    .body(new ParameterizedTypeReference<WalletResponse>() {});
-        } catch (Exception e) {
-            log.error("Error calling User Service for wallet, userId: {}", userId, e);
-            throw new RuntimeException("Failed to get wallet", e);
+            return walletMapper.toDomain(userApi.getWallet(userId));
+        } catch (RestClientResponseException e) {
+            log.error("Failed to get wallet, userId: {}, status: {}", userId, e.getStatusCode(), e);
+            throw new RuntimeException("Failed to get wallet: " + e.getStatusCode(), e);
         }
     }
 
-    /**
-     * Validate user conditions (user active and wallet active).
-     * Not annotated with @CircuitBreaker — the underlying getUser() and getWallet()
-     * calls are already protected. This method catches CallNotPermittedException
-     * and re-throws it so PaymentService can handle it.
-     */
     public boolean validateUserConditions(Long userId) {
         try {
-            UserResponse user = getUser(userId);
+            User user = getUser(userId);
             if (!user.isActive()) {
                 log.warn("User {} is not active", userId);
                 return false;
             }
 
-            WalletResponse wallet = getWallet(userId);
+            Wallet wallet = getWallet(userId);
             if (!wallet.isActive()) {
                 log.warn("Wallet for user {} is not active", userId);
                 return false;
@@ -107,16 +68,10 @@ public class UserClientService {
 
             return true;
         } catch (CallNotPermittedException e) {
-            // Circuit breaker is open — propagate so caller can return 503
             throw e;
         } catch (Exception e) {
             log.error("Error validating user conditions, userId: {}", userId, e);
             return false;
         }
     }
-
-    // DTOs
-    public record UserResponse(Long id, String username, String email, Boolean isActive, Boolean isVerified) {}
-    public record WalletResponse(Long id, Long userId, java.math.BigDecimal balance, String currency, Boolean isActive,
-                         java.time.LocalDateTime createdAt, java.time.LocalDateTime updatedAt) {}
 }

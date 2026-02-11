@@ -6,8 +6,8 @@ import com.example.paymentservice.client.WalletClientService;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
 import com.example.paymentservice.dto.request.RefundPaymentRequest;
+import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.response.InitiatePaymentResponse;
-import com.example.paymentservice.dto.response.QRCodeResponse;
 import com.example.paymentservice.entity.Payment;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.PaymentException;
@@ -107,15 +107,10 @@ public class PaymentStepDefinitions {
         currentPayment = paymentRepository.save(currentPayment);
         this.currentQrCode = qrCode;
 
-        // Mock QR validation - active and matching
+        // Mock QR validation - active and matching (returns domain QRCode)
         when(qrCodeClientService.validateQRCode(qrCode)).thenReturn(
-                QRCodeResponse.builder()
-                        .id(1L)
-                        .code(qrCode)
-                        .paymentId(currentPayment.getId())
-                        .status("ACTIVE")
-                        .expiresAt(LocalDateTime.now().plusMinutes(15))
-                        .build()
+                new QRCode(1L, qrCode, currentPayment.getId(), "ACTIVE",
+                        LocalDateTime.now().plusMinutes(15), LocalDateTime.now())
         );
     }
 
@@ -134,12 +129,8 @@ public class PaymentStepDefinitions {
     public void qrCodeExpired() {
         this.currentQrCode = "EXPIRED_QR";
         when(qrCodeClientService.validateQRCode(currentQrCode)).thenReturn(
-                QRCodeResponse.builder()
-                        .id(1L)
-                        .code(currentQrCode)
-                        .paymentId(currentPayment.getId())
-                        .status("EXPIRED")
-                        .build()
+                new QRCode(1L, currentQrCode, currentPayment.getId(), "EXPIRED",
+                        LocalDateTime.now().plusMinutes(15), LocalDateTime.now())
         );
     }
 
@@ -147,12 +138,8 @@ public class PaymentStepDefinitions {
     public void qrCodeBelongsToDifferentPayment() {
         this.currentQrCode = "MISMATCHED_QR";
         when(qrCodeClientService.validateQRCode(currentQrCode)).thenReturn(
-                QRCodeResponse.builder()
-                        .id(1L)
-                        .code(currentQrCode)
-                        .paymentId(99999L)  // Different payment ID
-                        .status("ACTIVE")
-                        .build()
+                new QRCode(1L, currentQrCode, 99999L, "ACTIVE",
+                        LocalDateTime.now().plusMinutes(15), LocalDateTime.now())
         );
     }
 
@@ -207,8 +194,8 @@ public class PaymentStepDefinitions {
         request.setDescription("Payment via QR scan");
 
         try {
-            currentPayment = paymentService.processPayment(
-                    currentPayment.getId(), request, null);
+            paymentService.processPayment(currentPayment.getId(), request, null);
+            currentPayment = paymentRepository.findById(currentPayment.getId()).orElseThrow();
         } catch (PaymentException e) {
             caughtException = e;
         }
@@ -223,8 +210,8 @@ public class PaymentStepDefinitions {
         request.setMerchantId("MERCHANT_001");
 
         try {
-            currentPayment = paymentService.processPayment(
-                    currentPayment.getId(), request, null);
+            paymentService.processPayment(currentPayment.getId(), request, null);
+            currentPayment = paymentRepository.findById(currentPayment.getId()).orElseThrow();
         } catch (PaymentException e) {
             caughtException = e;
         }
@@ -239,8 +226,8 @@ public class PaymentStepDefinitions {
         request.setMerchantId("MERCHANT_001");
 
         try {
-            currentPayment = paymentService.processPayment(
-                    currentPayment.getId(), request, null);
+            paymentService.processPayment(currentPayment.getId(), request, null);
+            currentPayment = paymentRepository.findById(currentPayment.getId()).orElseThrow();
         } catch (PaymentException e) {
             caughtException = e;
         }
@@ -255,8 +242,8 @@ public class PaymentStepDefinitions {
         request.setMerchantId("MERCHANT_001");
 
         try {
-            currentPayment = paymentService.processPayment(
-                    currentPayment.getId(), request, null);
+            paymentService.processPayment(currentPayment.getId(), request, null);
+            currentPayment = paymentRepository.findById(currentPayment.getId()).orElseThrow();
         } catch (PaymentException e) {
             caughtException = e;
         }
@@ -269,8 +256,8 @@ public class PaymentStepDefinitions {
         request.setReason("Customer request");
 
         try {
-            currentPayment = paymentService.refundPayment(
-                    currentPayment.getId(), request, null);
+            paymentService.refundPayment(currentPayment.getId(), request, null);
+            currentPayment = paymentRepository.findById(currentPayment.getId()).orElseThrow();
         } catch (PaymentException e) {
             caughtException = e;
         }
