@@ -1,6 +1,6 @@
 package com.example.paymentservice.service;
 
-import com.example.paymentservice.entity.EventOutboxEntity;
+import com.example.paymentservice.domain.model.EventOutbox;
 import com.example.paymentservice.entity.OutboxStatus;
 import com.example.paymentservice.repository.EventOutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,7 +42,7 @@ class OutboxServiceTest {
         String eventType = "TestEvent";
         String eventData = "{\"id\":1,\"name\":\"Test Event\"}";
         
-        EventOutboxEntity savedOutbox = EventOutboxEntity.builder()
+        EventOutbox savedOutbox = EventOutbox.builder()
                 .id(1L)
                 .eventType(eventType)
                 .eventData(eventData)
@@ -50,14 +50,14 @@ class OutboxServiceTest {
                 .build();
 
         when(objectMapper.writeValueAsString(testEvent)).thenReturn(eventData);
-        when(outboxRepository.save(any(EventOutboxEntity.class))).thenReturn(savedOutbox);
+        when(outboxRepository.save(any(EventOutbox.class))).thenReturn(savedOutbox);
 
         // When
         outboxService.saveEvent(eventType, testEvent);
 
         // Then
         verify(objectMapper).writeValueAsString(testEvent);
-        verify(outboxRepository).save(any(EventOutboxEntity.class));
+        verify(outboxRepository).save(any(EventOutbox.class));
     }
 
     @Test
@@ -73,7 +73,7 @@ class OutboxServiceTest {
         });
 
         assertTrue(exception.getMessage().contains("Failed to save event to outbox"));
-        verify(outboxRepository, never()).save(any(EventOutboxEntity.class));
+        verify(outboxRepository, never()).save(any(EventOutbox.class));
     }
 
     // Test event class

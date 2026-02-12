@@ -1,6 +1,5 @@
 package com.example.paymentservice.repository;
 
-import aj.org.objectweb.asm.commons.Remapper;
 import com.example.paymentservice.domain.model.Transaction;
 import com.example.paymentservice.entity.TransactionType;
 

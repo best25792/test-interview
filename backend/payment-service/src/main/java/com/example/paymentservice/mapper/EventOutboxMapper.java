@@ -1,9 +1,7 @@
 package com.example.paymentservice.mapper;
 
 import com.example.paymentservice.domain.model.EventOutbox;
-import com.example.paymentservice.domain.model.Payment;
 import com.example.paymentservice.entity.EventOutboxEntity;
-import com.example.paymentservice.entity.PaymentEntity;
 import org.springframework.stereotype.Component;
 
 @Component

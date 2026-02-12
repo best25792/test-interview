@@ -1,6 +1,6 @@
 package com.example.paymentservice.service;
 
-import com.example.paymentservice.entity.EventOutboxEntity;
+import com.example.paymentservice.domain.model.EventOutbox;
 import com.example.paymentservice.entity.OutboxStatus;
 import com.example.paymentservice.repository.EventOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,20 +29,20 @@ public class OutboxService {
     public void saveEvent(String eventType, Object event) {
         try {
             String eventData = objectMapper.writeValueAsString(event);
-            
+
             // Extract traceparent header from current OpenTelemetry context
             String traceparent = extractTraceParent();
-            
-            EventOutboxEntity outbox = EventOutboxEntity.builder()
+
+            EventOutbox outbox = EventOutbox.builder()
                     .eventType(eventType)
                     .eventData(eventData)
                     .status(OutboxStatus.PENDING)
                     .traceparent(traceparent)
                     .build();
-            
-            outboxRepository.save(outbox);
-            log.debug("Event saved to outbox: eventType={}, outboxId={}, traceparent={}", 
-                    eventType, outbox.getId(), traceparent);
+
+            EventOutbox saved = outboxRepository.save(outbox);
+            log.debug("Event saved to outbox: eventType={}, outboxId={}, traceparent={}",
+                    eventType, saved.getId(), traceparent);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize event to JSON: eventType={}", eventType, e);
             throw new RuntimeException("Failed to save event to outbox", e);

@@ -2,9 +2,6 @@ package com.example.paymentservice.service;
 
 import com.example.paymentservice.domain.model.Transaction;
 import com.example.paymentservice.entity.TransactionType;
-import com.example.paymentservice.exception.PaymentNotFoundException;
-import com.example.paymentservice.mapper.TransactionMapper;
-import com.example.paymentservice.repository.PaymentRepository;
 import com.example.paymentservice.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -3,9 +3,7 @@ package com.example.paymentservice.adapter.persistence;
 import com.example.paymentservice.domain.model.EventOutbox;
 import com.example.paymentservice.entity.EventOutboxEntity;
 import com.example.paymentservice.entity.OutboxStatus;
-import com.example.paymentservice.entity.PaymentEntity;
 import com.example.paymentservice.mapper.EventOutboxMapper;
-import com.example.paymentservice.mapper.TransactionMapper;
 import com.example.paymentservice.repository.EventOutboxRepository;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +23,13 @@ public class EventOutboxRepositoryAdapter implements EventOutboxRepository {
 
     private final SpringDataEventOutboxRepository eventOutboxRepository;
     private final EventOutboxMapper eventOutboxMapper;
+
+    @Override
+    public EventOutbox save(EventOutbox event) {
+        EventOutboxEntity entity = eventOutboxMapper.toEntity(event);
+        EventOutboxEntity saved = eventOutboxRepository.save(entity);
+        return eventOutboxMapper.toDomain(saved);
+    }
 
     @Override
     public List<EventOutbox> findByStatus(OutboxStatus status) {

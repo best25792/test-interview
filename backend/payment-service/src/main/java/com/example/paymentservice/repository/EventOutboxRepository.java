@@ -7,7 +7,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface EventOutboxRepository {
-    
+
+    EventOutbox save(EventOutbox event);
+
     List<EventOutbox> findByStatus(OutboxStatus status);
 
     List<EventOutbox> findPendingEventsWithLock(OutboxStatus status);
