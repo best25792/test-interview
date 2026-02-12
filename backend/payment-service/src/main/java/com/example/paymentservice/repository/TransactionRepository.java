@@ -1,16 +1,22 @@
 package com.example.paymentservice.repository;
 
-import com.example.paymentservice.entity.Transaction;
+import aj.org.objectweb.asm.commons.Remapper;
+import com.example.paymentservice.domain.model.Transaction;
 import com.example.paymentservice.entity.TransactionType;
-import org.springframework.data.jpa.repository.JpaRepository;
+
 
 import java.util.List;
+import java.util.Optional;
 
-public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+public interface TransactionRepository  {
     
     List<Transaction> findByPaymentId(Long paymentId);
     
     List<Transaction> findByType(TransactionType type);
     
     List<Transaction> findByPaymentIdOrderByTimestampDesc(Long paymentId);
+
+    List<Transaction> findAll();
+
+    Optional<Transaction> findById(Long id);
 }

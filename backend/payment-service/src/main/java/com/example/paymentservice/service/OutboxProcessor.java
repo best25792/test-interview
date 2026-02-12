@@ -1,16 +1,15 @@
 package com.example.paymentservice.service;
 
 import com.example.paymentservice.config.MapTextMapGetter;
-import com.example.paymentservice.entity.EventOutbox;
+import com.example.paymentservice.domain.model.EventOutbox;
 import com.example.paymentservice.entity.OutboxStatus;
-import com.example.paymentservice.kafka.KafkaEventProducer;
 import com.example.paymentservice.repository.EventOutboxRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.paymentservice.service.outbox.OutboxEventConsumer;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.ContextKey;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -21,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Processes events from the outbox table
@@ -33,13 +33,21 @@ import java.util.Map;
 public class OutboxProcessor {
 
     private final EventOutboxRepository outboxRepository;
-    private final ObjectMapper objectMapper;
-    private final KafkaEventProducer kafkaEventProducer;
-    private static final Tracer tracer =
-            GlobalOpenTelemetry.getTracer("payment-outbox");
-    
+    private final List<OutboxEventConsumer> outboxEventConsumers;
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("payment-outbox");
     private static final int MAX_RETRIES = 3;
     private static final int BATCH_SIZE = 10;
+
+    /** Registry: event type -> consumer. Built at startup from injected consumers. */
+    private Map<String, OutboxEventConsumer> consumerRegistry;
+
+    @PostConstruct
+    void initConsumerRegistry() {
+        consumerRegistry = outboxEventConsumers.stream()
+                .collect(Collectors.toMap(OutboxEventConsumer::getEventType, c -> c));
+        log.debug("Registered {} outbox event consumer(s): {}", consumerRegistry.size(), consumerRegistry.keySet());
+    }
 
     /**
      * Process pending events from outbox every 2 seconds
@@ -106,30 +114,13 @@ public class OutboxProcessor {
             log.info("Processing outbox event: id={}, eventType={}, traceparent={}", 
                     event.getId(), event.getEventType(), traceparent != null ? traceparent : "N/A");
             
-            // Publish event to Kafka based on event type, using traceparent from database
-            switch (event.getEventType()) {
-                case "PaymentCreatedEvent":
-                    PaymentService.PaymentCreatedEvent paymentCreated = objectMapper.readValue(
-                            event.getEventData(), PaymentService.PaymentCreatedEvent.class);
-                    kafkaEventProducer.publishPaymentCreated(paymentCreated, traceparent);
-                    break;
-                    
-                case "PaymentProcessedEvent":
-                    PaymentService.PaymentProcessedEvent paymentProcessed = objectMapper.readValue(
-                            event.getEventData(), PaymentService.PaymentProcessedEvent.class);
-                    kafkaEventProducer.publishPaymentProcessed(paymentProcessed, traceparent);
-                    break;
-                    
-                case "PaymentRefundedEvent":
-                    PaymentService.PaymentRefundedEvent paymentRefunded = objectMapper.readValue(
-                            event.getEventData(), PaymentService.PaymentRefundedEvent.class);
-                    kafkaEventProducer.publishPaymentRefunded(paymentRefunded, traceparent);
-                    break;
-                    
-                default:
-                    log.warn("Unknown event type: {}", event.getEventType());
-                    throw new IllegalArgumentException("Unknown event type: " + event.getEventType());
+            // Dispatch to the consumer registered for this event type
+            OutboxEventConsumer consumer = consumerRegistry.get(event.getEventType());
+            if (consumer == null) {
+                log.warn("Unknown event type: {}", event.getEventType());
+                throw new IllegalArgumentException("Unknown event type: " + event.getEventType());
             }
+            consumer.consume(event.getEventData(), traceparent);
             
             // Mark as completed
             outboxRepository.updateStatus(event.getId(), OutboxStatus.COMPLETED, LocalDateTime.now());

@@ -4,6 +4,7 @@ import com.example.paymentservice.domain.model.Payment;
 import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.response.PaymentResponse;
 import com.example.paymentservice.dto.response.QRCodeResponse;
+import com.example.paymentservice.entity.PaymentEntity;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,7 +17,7 @@ public class PaymentMapper {
     }
 
     /** Map JPA entity to domain using builder. */
-    public Payment toDomain(com.example.paymentservice.entity.Payment entity) {
+    public Payment toDomain(PaymentEntity entity) {
         if (entity == null) return null;
         return Payment.builder()
                 .id(entity.getId())
@@ -35,9 +36,9 @@ public class PaymentMapper {
     }
 
     /** Map domain to JPA entity (for save/update). */
-    public com.example.paymentservice.entity.Payment toEntity(Payment domain) {
+    public PaymentEntity toEntity(Payment domain) {
         if (domain == null) return null;
-        return com.example.paymentservice.entity.Payment.builder()
+        return PaymentEntity.builder()
                 .id(domain.getId())
                 .amount(domain.getAmount())
                 .currency(domain.getCurrency())

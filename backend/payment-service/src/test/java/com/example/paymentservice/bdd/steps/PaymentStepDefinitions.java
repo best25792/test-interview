@@ -3,12 +3,12 @@ package com.example.paymentservice.bdd.steps;
 import com.example.paymentservice.client.QRCodeClientService;
 import com.example.paymentservice.client.UserClientService;
 import com.example.paymentservice.client.WalletClientService;
+import com.example.paymentservice.domain.model.Payment;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
 import com.example.paymentservice.dto.request.RefundPaymentRequest;
 import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.response.InitiatePaymentResponse;
-import com.example.paymentservice.entity.Payment;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.PaymentException;
 import com.example.paymentservice.repository.PaymentRepository;
@@ -272,8 +272,8 @@ public class PaymentStepDefinitions {
         assertFalse(initiateResponses.isEmpty(), "Expected at least one initiate response");
 
         Long paymentId = initiateResponses.get(0).getTransactionId();
-        Payment payment = paymentRepository.findById(paymentId).orElseThrow();
-        assertEquals(PaymentStatus.valueOf(status), payment.getStatus());
+        Payment paymentEntity = paymentRepository.findById(paymentId).orElseThrow();
+        assertEquals(PaymentStatus.valueOf(status), paymentEntity.getStatus());
     }
 
     @Then("the payment status should be {string}")

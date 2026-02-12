@@ -1,6 +1,6 @@
 package com.example.paymentservice.service;
 
-import com.example.paymentservice.entity.EventOutbox;
+import com.example.paymentservice.entity.EventOutboxEntity;
 import com.example.paymentservice.entity.OutboxStatus;
 import com.example.paymentservice.repository.EventOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -33,7 +33,7 @@ public class OutboxService {
             // Extract traceparent header from current OpenTelemetry context
             String traceparent = extractTraceParent();
             
-            EventOutbox outbox = EventOutbox.builder()
+            EventOutboxEntity outbox = EventOutboxEntity.builder()
                     .eventType(eventType)
                     .eventData(eventData)
                     .status(OutboxStatus.PENDING)

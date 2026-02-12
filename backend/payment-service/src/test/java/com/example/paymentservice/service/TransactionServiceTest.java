@@ -1,6 +1,7 @@
 package com.example.paymentservice.service;
 
 import com.example.paymentservice.domain.model.Transaction;
+import com.example.paymentservice.entity.TransactionEntity;
 import com.example.paymentservice.entity.TransactionStatus;
 import com.example.paymentservice.entity.TransactionType;
 import com.example.paymentservice.exception.PaymentNotFoundException;
@@ -16,7 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,14 +40,13 @@ class TransactionServiceTest {
     @InjectMocks
     private TransactionService transactionService;
 
-    private Long transactionId = 1L;
-    private Long paymentId = 100L;
-    private com.example.paymentservice.entity.Transaction transactionEntity;
-    private Transaction domainTransaction;
+    private final Long transactionId = 1L;
+    private final Long paymentId = 100L;
+    private TransactionEntity transactionEntity;
 
     @BeforeEach
     void setUp() {
-        transactionEntity = com.example.paymentservice.entity.Transaction.builder()
+        transactionEntity = TransactionEntity.builder()
                 .id(transactionId)
                 .paymentId(paymentId)
                 .type(TransactionType.PAYMENT)
@@ -54,7 +54,7 @@ class TransactionServiceTest {
                 .status(TransactionStatus.SUCCESS)
                 .timestamp(LocalDateTime.now())
                 .build();
-        domainTransaction = Transaction.builder()
+        Transaction domainTransaction = Transaction.builder()
                 .id(transactionId)
                 .paymentId(paymentId)
                 .type(TransactionType.PAYMENT)
@@ -62,7 +62,7 @@ class TransactionServiceTest {
                 .status(TransactionStatus.SUCCESS)
                 .timestamp(LocalDateTime.now())
                 .build();
-        lenient().when(transactionMapper.toDomain(any(com.example.paymentservice.entity.Transaction.class))).thenReturn(domainTransaction);
+        lenient().when(transactionMapper.toDomain(any(TransactionEntity.class))).thenReturn(domainTransaction);
     }
 
     @Test
@@ -85,9 +85,7 @@ class TransactionServiceTest {
         when(transactionRepository.findById(transactionId)).thenReturn(Optional.empty());
 
         // When & Then
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
-            transactionService.getTransactionById(transactionId);
-        });
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> transactionService.getTransactionById(transactionId));
 
         assertTrue(exception.getMessage().contains("Transaction not found"));
         verify(transactionRepository).findById(transactionId);
@@ -96,7 +94,7 @@ class TransactionServiceTest {
     @Test
     void testGetAllTransactions() {
         // Given
-        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
+        List<TransactionEntity> entities = Collections.singletonList(transactionEntity);
         when(transactionRepository.findAll()).thenReturn(entities);
 
         // When
@@ -111,10 +109,8 @@ class TransactionServiceTest {
     @Test
     void testGetTransactionsByPaymentId_Success() {
         // Given
-        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(com.example.paymentservice.entity.Payment.builder()
-                .id(paymentId)
-                .build()));
+        List<TransactionEntity> entities = Collections.singletonList(transactionEntity);
+        when(paymentRepository.existsById(paymentId)).thenReturn(true);
         when(transactionRepository.findByPaymentIdOrderByTimestampDesc(paymentId)).thenReturn(entities);
 
         // When
@@ -123,28 +119,26 @@ class TransactionServiceTest {
         // Then
         assertNotNull(result);
         assertEquals(1, result.size());
-        verify(paymentRepository).findById(paymentId);
+        verify(paymentRepository).existsById(paymentId);
         verify(transactionRepository).findByPaymentIdOrderByTimestampDesc(paymentId);
     }
 
     @Test
     void testGetTransactionsByPaymentId_PaymentNotFound() {
         // Given
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.empty());
+        when(paymentRepository.existsById(paymentId)).thenReturn(false);
 
         // When & Then
-        assertThrows(PaymentNotFoundException.class, () -> {
-            transactionService.getTransactionsByPaymentId(paymentId);
-        });
+        assertThrows(PaymentNotFoundException.class, () -> transactionService.getTransactionsByPaymentId(paymentId));
 
-        verify(paymentRepository).findById(paymentId);
+        verify(paymentRepository).existsById(paymentId);
         verify(transactionRepository, never()).findByPaymentIdOrderByTimestampDesc(anyLong());
     }
 
     @Test
     void testGetTransactionsByType() {
         // Given
-        List<com.example.paymentservice.entity.Transaction> entities = Arrays.asList(transactionEntity);
+        List<TransactionEntity> entities = Collections.singletonList(transactionEntity);
         when(transactionRepository.findByType(TransactionType.PAYMENT)).thenReturn(entities);
 
         // When

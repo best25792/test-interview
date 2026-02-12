@@ -7,7 +7,6 @@ import com.example.paymentservice.domain.model.QRCode;
 import com.example.paymentservice.dto.request.InitiatePaymentRequest;
 import com.example.paymentservice.dto.request.ProcessPaymentRequest;
 import com.example.paymentservice.dto.request.RefundPaymentRequest;
-import com.example.paymentservice.entity.Payment;
 import com.example.paymentservice.entity.PaymentErrorCode;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.PaymentException;
@@ -55,33 +54,17 @@ class PaymentServiceTest {
 
     private Long userId = 1L;
     private Long paymentId = 100L;
-    private Payment payment;
     private com.example.paymentservice.domain.model.Payment domainPayment;
     private QRCode domainQRCode;
 
     @BeforeEach
     void setUp() {
-        payment = Payment.builder()
+        domainPayment = com.example.paymentservice.domain.model.Payment.builder()
                 .id(paymentId)
                 .amount(new BigDecimal("50.00"))
                 .currency("USD")
                 .status(PaymentStatus.READY)
                 .customerId(userId.toString())
-                .build();
-
-        domainPayment = com.example.paymentservice.domain.model.Payment.builder()
-                .id(paymentId)
-                .amount(payment.getAmount())
-                .currency(payment.getCurrency())
-                .status(payment.getStatus())
-                .merchantId(payment.getMerchantId())
-                .customerId(payment.getCustomerId())
-                .description(payment.getDescription())
-                .idempotencyKey(payment.getIdempotencyKey())
-                .errorCode(payment.getErrorCode())
-                .errorMessage(payment.getErrorMessage())
-                .createdAt(payment.getCreatedAt())
-                .updatedAt(payment.getUpdatedAt())
                 .build();
 
         domainQRCode = QRCode.builder()
@@ -92,17 +75,6 @@ class PaymentServiceTest {
                 .expiresAt(LocalDateTime.now().plusMinutes(15))
                 .createdAt(LocalDateTime.now())
                 .build();
-
-        lenient().when(paymentMapper.toDomain(any(Payment.class))).thenAnswer(inv -> {
-            Payment e = inv.getArgument(0);
-            return com.example.paymentservice.domain.model.Payment.builder()
-                    .id(e.getId()).amount(e.getAmount()).currency(e.getCurrency())
-                    .status(e.getStatus()).merchantId(e.getMerchantId()).customerId(e.getCustomerId())
-                    .description(e.getDescription()).idempotencyKey(e.getIdempotencyKey())
-                    .errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage())
-                    .createdAt(e.getCreatedAt()).updatedAt(e.getUpdatedAt())
-                    .build();
-        });
     }
 
     @Test
@@ -111,7 +83,7 @@ class PaymentServiceTest {
         InitiatePaymentRequest request = new InitiatePaymentRequest();
         request.setUserId(userId);
 
-        Payment savedPayment = Payment.builder()
+        com.example.paymentservice.domain.model.Payment savedPayment = com.example.paymentservice.domain.model.Payment.builder()
                 .id(paymentId)
                 .amount(BigDecimal.ZERO)
                 .currency("USD")
@@ -120,7 +92,7 @@ class PaymentServiceTest {
                 .build();
 
         when(userClientService.validateUserConditions(userId)).thenReturn(true);
-        when(paymentRepository.save(any(Payment.class))).thenReturn(savedPayment);
+        when(paymentRepository.save(any(com.example.paymentservice.domain.model.Payment.class))).thenReturn(savedPayment);
 
         // When
         var response = paymentService.initiatePayment(request, null);
@@ -130,7 +102,7 @@ class PaymentServiceTest {
         assertTrue(response.isSuccess());
         assertEquals(paymentId, response.getTransactionId());
         verify(userClientService).validateUserConditions(userId);
-        verify(paymentRepository).save(any(Payment.class));
+        verify(paymentRepository).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
@@ -149,7 +121,7 @@ class PaymentServiceTest {
         assertEquals("User does not meet business conditions", exception.getMessage());
         assertEquals(PaymentErrorCode.USER_VALIDATION_FAILED.name(), exception.getErrorCode());
         verify(userClientService).validateUserConditions(userId);
-        verify(paymentRepository, never()).save(any(Payment.class));
+        verify(paymentRepository, never()).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
@@ -159,7 +131,7 @@ class PaymentServiceTest {
         request.setUserId(userId);
 
         String idempotencyKey = "test-key-123";
-        Payment existingPayment = Payment.builder()
+        com.example.paymentservice.domain.model.Payment existingPayment = com.example.paymentservice.domain.model.Payment.builder()
                 .id(paymentId)
                 .status(PaymentStatus.PENDING)
                 .build();
@@ -174,13 +146,13 @@ class PaymentServiceTest {
         assertNotNull(response);
         assertEquals(paymentId, response.getTransactionId());
         verify(userClientService, never()).validateUserConditions(anyLong());
-        verify(paymentRepository, never()).save(any(Payment.class));
+        verify(paymentRepository, never()).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
     void testGetPaymentById_Success() {
         // Given
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(domainPayment));
 
         // When
         com.example.paymentservice.domain.model.Payment result = paymentService.getPaymentById(paymentId);
@@ -215,9 +187,9 @@ class PaymentServiceTest {
         request.setMerchantId("MERCHANT_001");
         request.setDescription("Test payment");
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(domainPayment));
         when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(domainQRCode);
-        when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
+        when(paymentRepository.save(any(com.example.paymentservice.domain.model.Payment.class))).thenReturn(domainPayment);
 
         // When
         com.example.paymentservice.domain.model.Payment result = paymentService.processPayment(paymentId, request, null);
@@ -226,7 +198,7 @@ class PaymentServiceTest {
         assertNotNull(result);
         assertEquals(PaymentStatus.COMPLETED, result.getStatus());
         verify(walletClientService).deductFromWallet(userId, request.getAmount());
-        verify(paymentRepository).save(any(Payment.class));
+        verify(paymentRepository).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
@@ -238,7 +210,7 @@ class PaymentServiceTest {
         request.setCurrency("USD");
         request.setMerchantId("MERCHANT_001");
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(domainPayment));
         when(qrCodeClientService.validateQRCode(request.getQrCode())).thenReturn(domainQRCode);
         doThrow(new WalletClientService.InsufficientBalanceException("Insufficient balance"))
                 .when(walletClientService).deductFromWallet(userId, request.getAmount());
@@ -249,13 +221,19 @@ class PaymentServiceTest {
         });
 
         assertEquals(PaymentErrorCode.INSUFFICIENT_BALANCE.name(), exception.getErrorCode());
-        verify(paymentRepository, never()).save(any(Payment.class));
+        verify(paymentRepository, never()).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
     void testProcessPayment_InvalidState() {
-        // Given
-        payment.setStatus(PaymentStatus.PENDING); // Not READY
+        // Given - domain payment in PENDING (not READY)
+        com.example.paymentservice.domain.model.Payment pendingPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(domainPayment.getAmount())
+                .currency(domainPayment.getCurrency())
+                .status(PaymentStatus.PENDING)
+                .customerId(domainPayment.getCustomerId())
+                .build();
 
         ProcessPaymentRequest request = new ProcessPaymentRequest();
         request.setQrCode("PAYMENT_100_1234567890_ABCDEF123456");
@@ -263,7 +241,7 @@ class PaymentServiceTest {
         request.setCurrency("USD");
         request.setMerchantId("MERCHANT_001");
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(pendingPayment));
 
         // When & Then
         PaymentException exception = assertThrows(PaymentException.class, () -> {
@@ -276,13 +254,19 @@ class PaymentServiceTest {
     @Test
     void testRefundPayment_Success() {
         // Given
-        payment.setStatus(PaymentStatus.COMPLETED);
+        com.example.paymentservice.domain.model.Payment completedPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(new BigDecimal("50.00"))
+                .currency("USD")
+                .status(PaymentStatus.COMPLETED)
+                .customerId(userId.toString())
+                .build();
         RefundPaymentRequest request = new RefundPaymentRequest();
         request.setAmount(new BigDecimal("30.00"));
         request.setReason("Customer request");
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
-        when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(completedPayment));
+        when(paymentRepository.save(any(com.example.paymentservice.domain.model.Payment.class))).thenReturn(completedPayment);
 
         // When
         com.example.paymentservice.domain.model.Payment result = paymentService.refundPayment(paymentId, request, null);
@@ -291,17 +275,23 @@ class PaymentServiceTest {
         assertNotNull(result);
         assertEquals(PaymentStatus.REFUNDED, result.getStatus());
         verify(walletClientService).addToWallet(eq(userId), eq(request.getAmount()), anyString());
-        verify(paymentRepository).save(any(Payment.class));
+        verify(paymentRepository).save(any(com.example.paymentservice.domain.model.Payment.class));
     }
 
     @Test
     void testRefundPayment_OnlyCompletedPayments() {
         // Given
-        payment.setStatus(PaymentStatus.PENDING);
+        com.example.paymentservice.domain.model.Payment pendingPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(domainPayment.getAmount())
+                .currency(domainPayment.getCurrency())
+                .status(PaymentStatus.PENDING)
+                .customerId(domainPayment.getCustomerId())
+                .build();
         RefundPaymentRequest request = new RefundPaymentRequest();
         request.setAmount(new BigDecimal("30.00"));
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(pendingPayment));
 
         // When & Then
         PaymentException exception = assertThrows(PaymentException.class, () -> {
@@ -315,11 +305,17 @@ class PaymentServiceTest {
     @Test
     void testRefundPayment_ExceedsAmount() {
         // Given
-        payment.setStatus(PaymentStatus.COMPLETED);
+        com.example.paymentservice.domain.model.Payment completedPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(new BigDecimal("50.00"))
+                .currency("USD")
+                .status(PaymentStatus.COMPLETED)
+                .customerId(userId.toString())
+                .build();
         RefundPaymentRequest request = new RefundPaymentRequest();
         request.setAmount(new BigDecimal("100.00")); // More than payment amount
 
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(completedPayment));
 
         // When & Then
         PaymentException exception = assertThrows(PaymentException.class, () -> {
@@ -332,9 +328,15 @@ class PaymentServiceTest {
     @Test
     void testCancelPayment_FromPending() {
         // Given
-        payment.setStatus(PaymentStatus.PENDING);
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
-        when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
+        com.example.paymentservice.domain.model.Payment pendingPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(domainPayment.getAmount())
+                .currency(domainPayment.getCurrency())
+                .status(PaymentStatus.PENDING)
+                .customerId(domainPayment.getCustomerId())
+                .build();
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(pendingPayment));
+        when(paymentRepository.save(any(com.example.paymentservice.domain.model.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         com.example.paymentservice.domain.model.Payment result = paymentService.cancelPayment(paymentId, "No longer needed");
@@ -347,9 +349,8 @@ class PaymentServiceTest {
     @Test
     void testCancelPayment_FromReady() {
         // Given
-        payment.setStatus(PaymentStatus.READY);
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
-        when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(domainPayment));
+        when(paymentRepository.save(any(com.example.paymentservice.domain.model.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // When
         com.example.paymentservice.domain.model.Payment result = paymentService.cancelPayment(paymentId, "Changed mind");
@@ -362,8 +363,14 @@ class PaymentServiceTest {
     @Test
     void testCancelPayment_CompletedPaymentCannotBeCancelled() {
         // Given
-        payment.setStatus(PaymentStatus.COMPLETED);
-        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        com.example.paymentservice.domain.model.Payment completedPayment = com.example.paymentservice.domain.model.Payment.builder()
+                .id(paymentId)
+                .amount(domainPayment.getAmount())
+                .currency(domainPayment.getCurrency())
+                .status(PaymentStatus.COMPLETED)
+                .customerId(domainPayment.getCustomerId())
+                .build();
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(completedPayment));
 
         // When & Then
         PaymentException exception = assertThrows(PaymentException.class, () -> {

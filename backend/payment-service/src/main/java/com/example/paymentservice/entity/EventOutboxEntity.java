@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EventOutbox {
+public class EventOutboxEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

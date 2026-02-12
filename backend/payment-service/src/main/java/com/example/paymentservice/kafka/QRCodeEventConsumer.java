@@ -1,6 +1,6 @@
 package com.example.paymentservice.kafka;
 
-import com.example.paymentservice.entity.Payment;
+import com.example.paymentservice.domain.model.Payment;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.repository.PaymentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,8 +53,21 @@ public class QRCodeEventConsumer {
             
             // Update payment status from PENDING to READY (QR code is now available)
             if (payment.getStatus() == PaymentStatus.PENDING) {
-                payment.setStatus(PaymentStatus.READY);
-                paymentRepository.save(payment);
+                Payment updated = Payment.builder()
+                        .id(payment.getId())
+                        .amount(payment.getAmount())
+                        .currency(payment.getCurrency())
+                        .status(PaymentStatus.READY)
+                        .merchantId(payment.getMerchantId())
+                        .customerId(payment.getCustomerId())
+                        .description(payment.getDescription())
+                        .idempotencyKey(payment.getIdempotencyKey())
+                        .errorCode(payment.getErrorCode())
+                        .errorMessage(payment.getErrorMessage())
+                        .createdAt(payment.getCreatedAt())
+                        .updatedAt(payment.getUpdatedAt())
+                        .build();
+                paymentRepository.save(updated);
                 
                 log.info("Updated payment status to READY for paymentId: {}, qrCodeId: {}", 
                         event.getPaymentId(), event.getQrCodeId());

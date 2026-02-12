@@ -2,13 +2,14 @@ package com.example.paymentservice.mapper;
 
 import com.example.paymentservice.domain.model.Transaction;
 import com.example.paymentservice.dto.response.TransactionResponse;
+import com.example.paymentservice.entity.TransactionEntity;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TransactionMapper {
 
     /** Map JPA entity to domain using builder. */
-    public Transaction toDomain(com.example.paymentservice.entity.Transaction entity) {
+    public Transaction toDomain(TransactionEntity entity) {
         if (entity == null) return null;
         return Transaction.builder()
                 .id(entity.getId())

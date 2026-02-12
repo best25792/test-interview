@@ -14,7 +14,6 @@ import com.example.paymentservice.entity.PaymentErrorCode;
 import com.example.paymentservice.entity.PaymentStatus;
 import com.example.paymentservice.exception.PaymentException;
 import com.example.paymentservice.exception.PaymentNotFoundException;
-import com.example.paymentservice.mapper.PaymentMapper;
 import com.example.paymentservice.repository.PaymentRepository;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.RequiredArgsConstructor;
@@ -42,8 +41,7 @@ import java.util.Optional;
 @Slf4j
 public class PaymentService {
 
-    private final PaymentRepository paymentRepository;
-    private final PaymentMapper paymentMapper;
+    private final PaymentRepository paymentPersistencePort;
     private final QRCodeClientService qrCodeClientService;
     private final WalletClientService walletClientService;
     private final UserClientService userClientService;
@@ -59,9 +57,9 @@ public class PaymentService {
     public InitiatePaymentResponse initiatePayment(InitiatePaymentRequest request, String idempotencyKey) {
         // 1. Idempotency check (before any processing)
         if (idempotencyKey != null) {
-            Optional<com.example.paymentservice.entity.Payment> existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
+            Optional<Payment> existing = paymentPersistencePort.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
-                Payment payment = paymentMapper.toDomain(existing.get());
+                Payment payment = existing.get();
                 log.info("Duplicate request detected for idempotencyKey: {}, returning existing payment: {}",
                         idempotencyKey, payment.getId());
                 return InitiatePaymentResponse.builder()
@@ -104,7 +102,7 @@ public class PaymentService {
 
     @Transactional
     protected Payment saveInitiatedPayment(InitiatePaymentRequest request, String idempotencyKey) {
-        com.example.paymentservice.entity.Payment entity = com.example.paymentservice.entity.Payment.builder()
+        Payment domain = Payment.builder()
                 .amount(BigDecimal.ZERO)
                 .currency("USD")
                 .status(PaymentStatus.PENDING)
@@ -114,7 +112,7 @@ public class PaymentService {
                 .idempotencyKey(idempotencyKey)
                 .build();
 
-        com.example.paymentservice.entity.Payment saved = paymentRepository.save(entity);
+        Payment saved = paymentPersistencePort.save(domain);
 
         PaymentCreatedEvent event = PaymentCreatedEvent.builder()
                 .paymentId(saved.getId())
@@ -127,12 +125,16 @@ public class PaymentService {
                 .build();
 
         outboxService.saveEvent("PaymentCreatedEvent", event);
-        return paymentMapper.toDomain(saved);
+
+        log.info("Payment initiated. Payment id: {}, User id: {} - PaymentCreatedEvent published. " +
+                "QR code will be generated asynchronously.", saved.getId(), request.getUserId());
+
+        return saved;
     }
 
     @Transactional
     public Payment createPayment(CreatePaymentRequest request) {
-        com.example.paymentservice.entity.Payment entity = com.example.paymentservice.entity.Payment.builder()
+        Payment domain = Payment.builder()
                 .amount(request.getAmount())
                 .currency(request.getCurrency().toUpperCase())
                 .status(PaymentStatus.PENDING)
@@ -141,7 +143,7 @@ public class PaymentService {
                 .description(request.getDescription())
                 .build();
 
-        com.example.paymentservice.entity.Payment saved = paymentRepository.save(entity);
+        Payment saved = paymentPersistencePort.save(domain);
 
         PaymentCreatedEvent event = PaymentCreatedEvent.builder()
                 .paymentId(saved.getId())
@@ -156,25 +158,20 @@ public class PaymentService {
         outboxService.saveEvent("PaymentCreatedEvent", event);
 
         log.info("Payment created with id: {} - PaymentCreatedEvent saved to outbox", saved.getId());
-        return paymentMapper.toDomain(saved);
+        return saved;
     }
 
     public Payment getPaymentById(Long id) {
-        com.example.paymentservice.entity.Payment entity = paymentRepository.findById(id)
+        return paymentPersistencePort.findById(id)
                 .orElseThrow(() -> new PaymentNotFoundException(id));
-        return paymentMapper.toDomain(entity);
     }
 
     public List<Payment> getAllPayments() {
-        return paymentRepository.findAll().stream()
-                .map(paymentMapper::toDomain)
-                .toList();
+        return paymentPersistencePort.findAll();
     }
 
     public List<Payment> getPaymentsByStatus(PaymentStatus status) {
-        return paymentRepository.findByStatus(status).stream()
-                .map(paymentMapper::toDomain)
-                .toList();
+        return paymentPersistencePort.findByStatus(status);
     }
 
     /**
@@ -188,11 +185,11 @@ public class PaymentService {
     public Payment processPayment(Long paymentId, ProcessPaymentRequest request, String idempotencyKey) {
         // 1. Idempotency check
         if (idempotencyKey != null) {
-            Optional<com.example.paymentservice.entity.Payment> existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
+            Optional<Payment> existing = paymentPersistencePort.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 log.info("Duplicate process request for idempotencyKey: {}, returning existing payment: {}",
                         idempotencyKey, existing.get().getId());
-                return paymentMapper.toDomain(existing.get());
+                return existing.get();
             }
         }
 
@@ -256,17 +253,25 @@ public class PaymentService {
 
     @Transactional
     protected Payment saveCompletedPayment(Long paymentId, ProcessPaymentRequest request, String idempotencyKey) {
-        com.example.paymentservice.entity.Payment entity = paymentRepository.findById(paymentId)
+        Payment current = paymentPersistencePort.findById(paymentId)
                 .orElseThrow(() -> new PaymentNotFoundException(paymentId));
 
-        entity.setAmount(request.getAmount());
-        entity.setCurrency(request.getCurrency().toUpperCase());
-        entity.setMerchantId(request.getMerchantId());
-        entity.setDescription(request.getDescription());
-        entity.setStatus(PaymentStatus.COMPLETED);
-        entity.setIdempotencyKey(idempotencyKey);
+        Payment updated = Payment.builder()
+                .id(current.getId())
+                .amount(request.getAmount())
+                .currency(request.getCurrency().toUpperCase())
+                .merchantId(request.getMerchantId())
+                .customerId(current.getCustomerId())
+                .description(request.getDescription())
+                .status(PaymentStatus.COMPLETED)
+                .idempotencyKey(idempotencyKey)
+                .errorCode(current.getErrorCode())
+                .errorMessage(current.getErrorMessage())
+                .createdAt(current.getCreatedAt())
+                .updatedAt(current.getUpdatedAt())
+                .build();
 
-        com.example.paymentservice.entity.Payment updated = paymentRepository.save(entity);
+        Payment saved = paymentPersistencePort.save(updated);
 
         PaymentProcessedEvent event = PaymentProcessedEvent.builder()
                 .paymentId(paymentId)
@@ -280,7 +285,7 @@ public class PaymentService {
 
         log.info("Payment completed. Payment id: {}, Amount: {}, Merchant: {} - Wallet deducted",
                 paymentId, request.getAmount(), request.getMerchantId());
-        return paymentMapper.toDomain(updated);
+        return saved;
     }
 
     /**
@@ -298,13 +303,23 @@ public class PaymentService {
                             ". Only PENDING or READY payments can be cancelled.");
         }
 
-        com.example.paymentservice.entity.Payment entity = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new PaymentNotFoundException(paymentId));
-        entity.setStatus(PaymentStatus.CANCELLED);
-        com.example.paymentservice.entity.Payment updated = paymentRepository.save(entity);
+        Payment updated = Payment.builder()
+                .id(payment.getId())
+                .amount(payment.getAmount())
+                .currency(payment.getCurrency())
+                .status(PaymentStatus.CANCELLED)
+                .merchantId(payment.getMerchantId())
+                .customerId(payment.getCustomerId())
+                .description(payment.getDescription())
+                .idempotencyKey(payment.getIdempotencyKey())
+                .errorCode(payment.getErrorCode())
+                .errorMessage(payment.getErrorMessage())
+                .createdAt(payment.getCreatedAt())
+                .updatedAt(payment.getUpdatedAt())
+                .build();
 
         log.info("Payment cancelled. Payment id: {}, Reason: {}", paymentId, reason);
-        return paymentMapper.toDomain(updated);
+        return paymentPersistencePort.save(updated);
     }
 
     /**
@@ -316,11 +331,11 @@ public class PaymentService {
     public Payment refundPayment(Long paymentId, RefundPaymentRequest request, String idempotencyKey) {
         // 1. Idempotency check
         if (idempotencyKey != null) {
-            Optional<com.example.paymentservice.entity.Payment> existing = paymentRepository.findByIdempotencyKey(idempotencyKey);
+            Optional<Payment> existing = paymentPersistencePort.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent() && existing.get().getStatus() == PaymentStatus.REFUNDED) {
                 log.info("Duplicate refund request for idempotencyKey: {}, returning existing payment: {}",
                         idempotencyKey, existing.get().getId());
-                return paymentMapper.toDomain(existing.get());
+                return existing.get();
             }
         }
 
@@ -359,17 +374,28 @@ public class PaymentService {
 
     @Transactional
     protected Payment saveRefundedPayment(Long paymentId, RefundPaymentRequest request, String idempotencyKey) {
-        com.example.paymentservice.entity.Payment entity = paymentRepository.findById(paymentId)
+        Payment current = paymentPersistencePort.findById(paymentId)
                 .orElseThrow(() -> new PaymentNotFoundException(paymentId));
 
-        entity.setStatus(PaymentStatus.REFUNDED);
-        if (idempotencyKey != null) {
-            entity.setIdempotencyKey(idempotencyKey);
-        }
-        com.example.paymentservice.entity.Payment updated = paymentRepository.save(entity);
+        Payment updated = Payment.builder()
+                .id(current.getId())
+                .amount(current.getAmount())
+                .currency(current.getCurrency())
+                .status(PaymentStatus.REFUNDED)
+                .merchantId(current.getMerchantId())
+                .customerId(current.getCustomerId())
+                .description(current.getDescription())
+                .idempotencyKey(idempotencyKey != null ? idempotencyKey : current.getIdempotencyKey())
+                .errorCode(current.getErrorCode())
+                .errorMessage(current.getErrorMessage())
+                .createdAt(current.getCreatedAt())
+                .updatedAt(current.getUpdatedAt())
+                .build();
+
+        Payment saved = paymentPersistencePort.save(updated);
 
         PaymentRefundedEvent event = PaymentRefundedEvent.builder()
-                .paymentId(updated.getId())
+                .paymentId(saved.getId())
                 .refundAmount(request.getAmount())
                 .reason(request.getReason())
                 .timestamp(LocalDateTime.now())
@@ -379,7 +405,7 @@ public class PaymentService {
 
         log.info("Payment refunded. Payment id: {}, Refund amount: {} - Wallet credited",
                 paymentId, request.getAmount());
-        return paymentMapper.toDomain(updated);
+        return saved;
     }
 
     // Event DTOs for outbox
