@@ -27,7 +27,7 @@ public class Transaction {
     // Note: @ManyToOne relationship kept as Payment and Transaction are in same database (payment_db)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_id", insertable = false, updatable = false)
-    private Payment payment;
+    private PaymentEntity payment;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
