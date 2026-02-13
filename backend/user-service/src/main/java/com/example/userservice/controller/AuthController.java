@@ -7,11 +7,14 @@ import com.example.userservice.dto.request.RequestOtpRequest;
 import com.example.userservice.dto.request.VerifyOtpRequest;
 import com.example.userservice.dto.response.RequestOtpResponse;
 import com.example.userservice.dto.response.TokenResponse;
+import com.example.userservice.config.JwtProperties;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -19,6 +22,16 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtProperties jwtProperties;
+
+    /** Public endpoint so consumer services can discover issuer/algorithm (no secret). */
+    @GetMapping("/jwt-config")
+    public ResponseEntity<Map<String, String>> jwtConfig() {
+        return ResponseEntity.ok(Map.of(
+                "issuer", jwtProperties.issuer(),
+                "algorithm", "HS256"
+        ));
+    }
 
     @PostMapping("/login/request-otp")
     public ResponseEntity<RequestOtpResponse> requestOtp(@Valid @RequestBody RequestOtpRequest request) {
