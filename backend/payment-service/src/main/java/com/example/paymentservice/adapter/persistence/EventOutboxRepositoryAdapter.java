@@ -56,23 +56,3 @@ public class EventOutboxRepositoryAdapter implements EventOutboxRepository {
     }
 }
 
-interface SpringDataEventOutboxRepository extends JpaRepository<EventOutboxEntity, Long> {
-
-    List<EventOutboxEntity> findByStatus(OutboxStatus status);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT e FROM EventOutbox e WHERE e.status = :status ORDER BY e.createdAt ASC")
-    List<EventOutboxEntity> findPendingEventsWithLock(@Param("status") OutboxStatus status);
-
-    @Modifying
-    @Query("UPDATE EventOutbox e SET e.status = :newStatus, e.processedAt = :processedAt WHERE e.id = :id")
-    Integer updateStatus(@Param("id") Long id,
-                     @Param("newStatus") OutboxStatus newStatus,
-                     @Param("processedAt") LocalDateTime processedAt);
-
-    @Modifying
-    @Query("UPDATE EventOutbox e SET e.status = :newStatus, e.retryCount = e.retryCount + 1, e.errorMessage = :errorMessage WHERE e.id = :id")
-    Integer updateFailedStatus(@Param("id") Long id,
-                           @Param("newStatus") OutboxStatus newStatus,
-                           @Param("errorMessage") String errorMessage);
-}

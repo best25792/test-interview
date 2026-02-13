@@ -2,13 +2,15 @@ package com.example.userservice.auth;
 
 import com.example.userservice.entity.DeviceSession;
 import com.example.userservice.repository.DeviceSessionRepository;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -16,11 +18,21 @@ public class AuthSessionService {
 
     private final JwtService jwtService;
     private final DeviceSessionRepository deviceSessionRepository;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public AuthSessionService(JwtService jwtService, DeviceSessionRepository deviceSessionRepository) {
         this.jwtService = jwtService;
         this.deviceSessionRepository = deviceSessionRepository;
+    }
+
+    /** SHA-256 hash for refresh token (JWT exceeds BCrypt's 72-byte limit). */
+    private static String hashRefreshToken(String refreshToken) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(refreshToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 
     /**
@@ -33,7 +45,7 @@ public class AuthSessionService {
         String accessToken = jwtService.issueAccessToken(userId);
         String refreshToken = jwtService.issueRefreshToken(userId);
         JwtService.JwtClaims refreshClaims = jwtService.validateRefreshToken(refreshToken);
-        String refreshTokenHash = passwordEncoder.encode(refreshToken);
+        String refreshTokenHash = hashRefreshToken(refreshToken);
         LocalDateTime expiresAt = LocalDateTime.ofInstant(refreshClaims.expiresAt(), ZoneId.systemDefault());
         DeviceSession session = DeviceSession.builder()
                 .userId(userId)
@@ -56,8 +68,9 @@ public class AuthSessionService {
         JwtService.JwtClaims claims = jwtService.validateRefreshToken(refreshToken);
         Long userId = claims.userId();
         List<DeviceSession> sessions = deviceSessionRepository.findByUserIdAndIsRevokedFalse(userId);
+        String incomingHash = hashRefreshToken(refreshToken);
         for (DeviceSession session : sessions) {
-            if (passwordEncoder.matches(refreshToken, session.getRefreshTokenHash())) {
+            if (incomingHash.equals(session.getRefreshTokenHash())) {
                 if (session.getRefreshTokenExpiresAt().isBefore(LocalDateTime.now())) {
                     return null;
                 }
@@ -76,8 +89,9 @@ public class AuthSessionService {
             JwtService.JwtClaims claims = jwtService.validateRefreshToken(refreshToken);
             Long userId = claims.userId();
             List<DeviceSession> sessions = deviceSessionRepository.findByUserIdAndIsRevokedFalse(userId);
+            String incomingHash = hashRefreshToken(refreshToken);
             for (DeviceSession session : sessions) {
-                if (passwordEncoder.matches(refreshToken, session.getRefreshTokenHash())) {
+                if (incomingHash.equals(session.getRefreshTokenHash())) {
                     session.setIsRevoked(true);
                     session.setRevokedAt(LocalDateTime.now());
                     deviceSessionRepository.save(session);
