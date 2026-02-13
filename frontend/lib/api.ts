@@ -1,4 +1,5 @@
-import axios from 'axios'
+import axios, { type InternalAxiosRequestConfig } from 'axios'
+import { authStore } from '@/lib/auth-store'
 
 // Microservice base URLs
 const USER_SERVICE_URL = process.env.NEXT_PUBLIC_USER_SERVICE_URL || 'http://localhost:8081/api/v1'
@@ -29,6 +30,43 @@ const paymentApiClient = axios.create({
   },
 })
 
+// Attach Bearer token and handle 401 with refresh (payment + transaction use this client)
+paymentApiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = authStore.getAccessToken()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+paymentApiClient.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    const originalRequest = err.config
+    if (err.response?.status !== 401 || originalRequest._retry) {
+      if (err.response?.status === 401 && typeof window !== 'undefined') {
+        authStore.clearTokens()
+        window.location.href = '/login'
+      }
+      return Promise.reject(err)
+    }
+    const refreshToken = authStore.getRefreshToken()
+    if (!refreshToken) {
+      if (typeof window !== 'undefined') window.location.href = '/login'
+      return Promise.reject(err)
+    }
+    originalRequest._retry = true
+    try {
+      const data = await authApi.refresh(refreshToken)
+      authStore.setTokens(data.accessToken, data.refreshToken)
+      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
+      return paymentApiClient(originalRequest)
+    } catch {
+      authStore.clearTokens()
+      if (typeof window !== 'undefined') window.location.href = '/login'
+      return Promise.reject(err)
+    }
+  }
+)
+
 const qrApiClient = axios.create({
   baseURL: QR_SERVICE_URL,
   headers: {
@@ -42,6 +80,66 @@ const orderApiClient = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+// Auth API (User Service - no Bearer on these endpoints)
+export const authApi = {
+  requestOtp: async (phoneNumber: string, channel: 'SMS' | 'EMAIL' = 'SMS') => {
+    const response = await userApiClient.post<{ message: string }>('/auth/login/request-otp', {
+      phoneNumber,
+      channel,
+    })
+    return response.data
+  },
+
+  verifyOtp: async (
+    phoneNumber: string,
+    code: string,
+    deviceId?: string
+  ) => {
+    const response = await userApiClient.post<{
+      accessToken: string
+      refreshToken: string
+      expiresIn: number
+    }>('/auth/login/verify-otp', { phoneNumber, code, deviceId })
+    return response.data
+  },
+
+  refresh: async (refreshToken: string) => {
+    const response = await userApiClient.post<{
+      accessToken: string
+      refreshToken: string
+      expiresIn: number
+    }>('/auth/token/refresh', { refreshToken })
+    return response.data
+  },
+
+  logout: async (refreshToken: string) => {
+    await userApiClient.post('/auth/logout', { refreshToken })
+  },
+
+  jwtConfig: async () => {
+    const response = await userApiClient.get<{ issuer: string; algorithm: string }>('/auth/jwt-config')
+    return response.data
+  },
+
+  recoveryRequestOtp: async (email: string) => {
+    const response = await userApiClient.post<{ message: string }>(
+      `/auth/recovery/request-otp?email=${encodeURIComponent(email)}`
+    )
+    return response.data
+  },
+
+  recoveryVerifyOtp: async (email: string, code: string, deviceId?: string) => {
+    const params = new URLSearchParams({ email, code })
+    if (deviceId) params.append('deviceId', deviceId)
+    const response = await userApiClient.post<{
+      accessToken: string
+      refreshToken: string
+      expiresIn: number
+    }>(`/auth/recovery/verify-otp?${params.toString()}`)
+    return response.data
+  },
+}
 
 // User API (User Service - Port 8081)
 export const userApi = {

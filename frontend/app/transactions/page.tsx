@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { transactionApi } from '@/lib/api'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 export default function TransactionsPage() {
   const [loading, setLoading] = useState(false)
@@ -54,6 +55,7 @@ export default function TransactionsPage() {
   }
 
   return (
+    <ProtectedRoute>
     <div className="max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">Transaction History</h1>
 
@@ -159,5 +161,6 @@ export default function TransactionsPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   )
 }
