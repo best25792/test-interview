@@ -3,10 +3,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { paymentApi } from '@/lib/api'
 import dynamic from 'next/dynamic'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
+import { useAuth } from '@/lib/auth-context'
 
 const QRCode = dynamic(() => import('qrcode.react'), { ssr: false })
 
 export default function PaymentsPage() {
+  const { userId: authUserId } = useAuth()
   const [activeTab, setActiveTab] = useState<'initiate' | 'list' | 'process' | 'view'>('initiate')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
@@ -146,7 +149,7 @@ export default function PaymentsPage() {
         } else {
           // Continue polling - update UI to show polling status
           console.log(`[Polling] No QR code yet, continuing... (attempt ${pollCount}/${maxPolls})`)
-          setPaymentResult(prev => ({
+          setPaymentResult((prev: { transactionId: number; message: string } | null) => ({
             ...prev,
             transactionId: paymentId,
             message: `Waiting for QR code... (Attempt ${pollCount}/${maxPolls})`
@@ -155,7 +158,7 @@ export default function PaymentsPage() {
       } catch (error: any) {
         console.error('[Polling] Error polling payment status:', error)
         // Continue polling on error (might be temporary)
-        setPaymentResult(prev => ({
+        setPaymentResult((prev: { transactionId: number; message: string } | null) => ({
           ...prev,
           transactionId: paymentId,
           message: `Error polling status, retrying... (Attempt ${pollCount}/${maxPolls})`
@@ -360,7 +363,13 @@ export default function PaymentsPage() {
     }
   }
 
+  useEffect(() => {
+    if (authUserId != null && !initiateUserId) setInitiateUserId(String(authUserId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only default when auth loads, don't overwrite if user cleared
+  }, [authUserId])
+
   return (
+    <ProtectedRoute>
     <div className="max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">Payment Management</h1>
 
@@ -711,5 +720,6 @@ export default function PaymentsPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   )
 }

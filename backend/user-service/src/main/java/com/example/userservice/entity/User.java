@@ -37,6 +37,14 @@ public class User {
     @Builder.Default
     private Boolean isVerified = false;
 
+    @Column(name = "is_2fa_enabled", nullable = false)
+    @Builder.Default
+    private Boolean is2faEnabled = true;
+
+    @Column(name = "is_review_account", nullable = false)
+    @Builder.Default
+    private Boolean isReviewAccount = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

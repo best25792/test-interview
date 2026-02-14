@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="UserServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" folderName="payment_provider" nameIsGenerated="true">
+    <module name="user-service" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.example.userservice.UserServiceApplication" />
+    <option name="VM_PARAMETERS" value="-javaagent:$PROJECT_DIR$/opentelemetry-javaagent.jar" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="com.example.userservice.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
