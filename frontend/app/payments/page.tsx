@@ -45,34 +45,44 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([])
   const [statusFilter, setStatusFilter] = useState('')
 
+  /** Delay (ms) after initiate API before polling, so eventual consistency (e.g. QR generation) can complete. */
+  const INITIATE_DELAY_MS = 1000
+
   const handleInitiatePayment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!initiateUserId) return
     setLoading(true)
     setMessage(null)
     setIsExpired(false)
-    
+    setPaymentResult(null)
+
     // Stop any existing polling
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
       pollingRef.current = null
     }
-    
+
     try {
       // Step 1: Initiate payment (Saga Pattern - returns only payment ID)
       const data = await paymentApi.initiatePayment(parseInt(initiateUserId))
       const paymentId = data.transactionId
-      
+
       console.log('[Initiate Payment] Payment initiated, paymentId:', paymentId)
-      
-      setMessage({ type: 'success', text: 'Payment initiated. Waiting for QR code...' })
-      
-      // Initialize payment result with transaction ID to show in UI
+
+      setMessage({ type: 'success', text: 'Payment initiated. Waiting for backend (eventual consistency)...' })
       setPaymentResult({
         transactionId: paymentId,
-        message: 'Waiting for QR code generation... (Attempt 0/60)'
+        message: `Waiting ${INITIATE_DELAY_MS / 1000}s for backend, then polling for QR code...`
       })
-      
+
+      // Delay after request so backend/eventual consistency (e.g. outbox, QR generation) is ready before first poll
+      await new Promise((resolve) => setTimeout(resolve, INITIATE_DELAY_MS))
+
+      setMessage({ type: 'success', text: 'Payment initiated. Waiting for QR code...' })
+      setPaymentResult((prev: { transactionId: number; message: string } | null) =>
+        prev ? { ...prev, message: 'Waiting for QR code generation... (Attempt 0/60)' } : prev
+      )
+
       // Step 2: Start polling for payment status until QR code is available
       setIsPolling(true)
       startPollingPaymentStatus(paymentId)
@@ -369,7 +379,7 @@ export default function PaymentsPage() {
   }, [authUserId])
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="PAYMENT_USER">
     <div className="max-w-6xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">Payment Management</h1>
 

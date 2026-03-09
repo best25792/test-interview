@@ -17,8 +17,11 @@ public class CreateUserRequest {
     private String email;
     
     private String phoneNumber;
-    
+
+    /** One of: PAYMENT_USER, MERCHANT, ADMIN. Default PAYMENT_USER if not set. */
+    private String role;
+
     private Boolean isActive;
-    
+
     private Boolean isVerified;
 }

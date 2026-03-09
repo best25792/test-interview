@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -25,11 +26,12 @@ class JwtServiceTest {
     }
 
     @Test
-    void issueAndValidateAccessToken_returnsUserId() {
-        String token = jwtService.issueAccessToken(100L);
+    void issueAndValidateAccessToken_returnsUserIdAndRoles() {
+        String token = jwtService.issueAccessToken(100L, List.of("PAYMENT_USER"));
         assertNotNull(token);
         JwtService.JwtClaims claims = jwtService.validateAccessToken(token);
         assertEquals(100L, claims.userId());
+        assertEquals(List.of("PAYMENT_USER"), claims.roles());
         assertNotNull(claims.expiresAt());
     }
 
@@ -40,16 +42,25 @@ class JwtServiceTest {
     }
 
     @Test
+    void issueAccessToken_withEmptyRoles() {
+        String token = jwtService.issueAccessToken(200L, List.of());
+        JwtService.JwtClaims claims = jwtService.validateAccessToken(token);
+        assertEquals(200L, claims.userId());
+        assertTrue(claims.roles().isEmpty());
+    }
+
+    @Test
     void issueAndValidateRefreshToken_returnsUserId() {
         String token = jwtService.issueRefreshToken(200L);
         assertNotNull(token);
         JwtService.JwtClaims claims = jwtService.validateRefreshToken(token);
         assertEquals(200L, claims.userId());
+        assertNotNull(claims.roles());
     }
 
     @Test
     void validateRefreshToken_rejectsAccessToken() {
-        String accessToken = jwtService.issueAccessToken(100L);
+        String accessToken = jwtService.issueAccessToken(100L, List.of());
         assertThrows(JwtException.class, () -> jwtService.validateRefreshToken(accessToken));
     }
 

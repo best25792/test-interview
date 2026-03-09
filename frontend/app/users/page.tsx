@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { userApi } from '@/lib/api'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 export default function UsersPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'view' | 'wallet'>('create')
@@ -13,6 +14,7 @@ export default function UsersPage() {
     username: '',
     email: '',
     phoneNumber: '',
+    role: 'PAYMENT_USER',
     isActive: true,
     isVerified: false,
   })
@@ -34,7 +36,7 @@ export default function UsersPage() {
     try {
       const data = await userApi.createUser(userForm)
       setMessage({ type: 'success', text: `User created successfully! ID: ${data.id}` })
-      setUserForm({ username: '', email: '', phoneNumber: '', isActive: true, isVerified: false })
+      setUserForm({ username: '', email: '', phoneNumber: '', role: 'PAYMENT_USER', isActive: true, isVerified: false })
     } catch (error: any) {
       setMessage({ type: 'error', text: error.response?.data?.message || 'Failed to create user' })
     } finally {
@@ -96,6 +98,7 @@ export default function UsersPage() {
   }
 
   return (
+    <ProtectedRoute requiredRole="ADMIN">
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">User Management</h1>
 
@@ -167,6 +170,18 @@ export default function UsersPage() {
                 required
                 className="w-full px-3 py-2 border rounded-md text-black"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Role</label>
+              <select
+                value={userForm.role}
+                onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md text-black"
+              >
+                <option value="PAYMENT_USER">Payment User (Payments tab)</option>
+                <option value="MERCHANT">Merchant (Merchant Store tab)</option>
+                <option value="ADMIN">Admin (Transactions + Users tabs)</option>
+              </select>
             </div>
             <div className="flex items-center space-x-4">
               <label className="flex items-center text-black">
@@ -300,5 +315,6 @@ export default function UsersPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   )
 }

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useOrders } from '@/lib/store-context'
 import { orderApi } from '@/lib/api'
 import { MERCHANT_ID } from '@/lib/store-data'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 const statusColors: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-800',
@@ -102,15 +103,18 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
+      <ProtectedRoute requiredRole="MERCHANT">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-black mb-6">Orders</h1>
         <p className="text-gray-600">Loading orders...</p>
       </div>
+      </ProtectedRoute>
     )
   }
 
   if (orders.length === 0) {
     return (
+      <ProtectedRoute requiredRole="MERCHANT">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-black mb-6">Orders</h1>
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-12 text-center">
@@ -123,10 +127,12 @@ export default function OrdersPage() {
           </Link>
         </div>
       </div>
+      </ProtectedRoute>
     )
   }
 
   return (
+    <ProtectedRoute requiredRole="MERCHANT">
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-black">Orders</h1>
@@ -222,5 +228,6 @@ export default function OrdersPage() {
           ))}
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

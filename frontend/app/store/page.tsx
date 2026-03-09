@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useStore } from '@/lib/store-context'
 import { useEffect } from 'react'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 export default function StorePage() {
   const { products, refreshProducts, addToCart } = useStore()
@@ -12,6 +13,7 @@ export default function StorePage() {
   }, [refreshProducts])
 
   return (
+    <ProtectedRoute requiredRole="MERCHANT">
     <div className="max-w-6xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-black">🛒 Merchant Store</h1>
@@ -73,5 +75,6 @@ export default function StorePage() {
         </Link>
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

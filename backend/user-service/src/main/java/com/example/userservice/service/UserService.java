@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * User Service - Manages user creation and operations
  * Note: Wallet operations are handled by wallet-service
@@ -37,10 +39,17 @@ public class UserService {
         }
 
         // Create user
+        String role = request.getRole() != null && !request.getRole().isBlank()
+                ? request.getRole().toUpperCase()
+                : "PAYMENT_USER";
+        if (!List.of("PAYMENT_USER", "MERCHANT", "ADMIN").contains(role)) {
+            role = "PAYMENT_USER";
+        }
         User user = User.builder()
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .phoneNumber(request.getPhoneNumber())
+                .role(role)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .isVerified(request.getIsVerified() != null ? request.getIsVerified() : false)
                 .build();

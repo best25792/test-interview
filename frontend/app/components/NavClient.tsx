@@ -4,8 +4,16 @@ import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+const ROLE_PAYMENT_USER = 'PAYMENT_USER'
+const ROLE_MERCHANT = 'MERCHANT'
+const ROLE_ADMIN = 'ADMIN'
+
+function hasRole(roles: string[], role: string) {
+  return roles.includes(role)
+}
+
 export function NavClient() {
-  const { isAuthenticated, userId, logout, isLoading } = useAuth()
+  const { isAuthenticated, userId, roles, logout, isLoading } = useAuth()
   const router = useRouter()
 
   const handleLogout = async () => {
@@ -22,18 +30,26 @@ export function NavClient() {
             <Link href="/" className="hover:text-blue-200 px-3 py-2 rounded">
               Home
             </Link>
-            <Link href="/store" className="hover:text-blue-200 px-3 py-2 rounded">
-              Merchant Store
-            </Link>
-            <Link href="/users" className="hover:text-blue-200 px-3 py-2 rounded">
-              Users
-            </Link>
-            <Link href="/payments" className="hover:text-blue-200 px-3 py-2 rounded">
-              Payments
-            </Link>
-            <Link href="/transactions" className="hover:text-blue-200 px-3 py-2 rounded">
-              Transactions
-            </Link>
+            {isAuthenticated && hasRole(roles, ROLE_MERCHANT) && (
+              <Link href="/store" className="hover:text-blue-200 px-3 py-2 rounded">
+                Merchant Store
+              </Link>
+            )}
+            {isAuthenticated && hasRole(roles, ROLE_ADMIN) && (
+              <Link href="/users" className="hover:text-blue-200 px-3 py-2 rounded">
+                Users
+              </Link>
+            )}
+            {isAuthenticated && hasRole(roles, ROLE_PAYMENT_USER) && (
+              <Link href="/payments" className="hover:text-blue-200 px-3 py-2 rounded">
+                Payments
+              </Link>
+            )}
+            {isAuthenticated && hasRole(roles, ROLE_ADMIN) && (
+              <Link href="/transactions" className="hover:text-blue-200 px-3 py-2 rounded">
+                Transactions
+              </Link>
+            )}
             {!isLoading &&
               (isAuthenticated ? (
                 <>

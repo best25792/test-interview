@@ -8,6 +8,7 @@ type AuthState = {
   userId: number | null
   accessToken: string | null
   refreshToken: string | null
+  roles: string[]
   isLoading: boolean
   isAuthenticated: boolean
 }
@@ -16,6 +17,7 @@ const defaultState: AuthState = {
   userId: null,
   accessToken: null,
   refreshToken: null,
+  roles: [],
   isLoading: true,
   isAuthenticated: false,
 }
@@ -34,6 +36,7 @@ function readFromStore(): AuthState {
     userId: authStore.getUserId(),
     accessToken: authStore.getAccessToken(),
     refreshToken: authStore.getRefreshToken(),
+    roles: authStore.getRoles(),
     isLoading: false,
     isAuthenticated: authStore.isAuthenticated(),
   }

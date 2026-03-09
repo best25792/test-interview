@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCart } from '@/lib/store-context'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 export default function CartPage() {
   const { items, totalItems, totalAmount, removeFromCart, setCartQuantity, clearCart } =
@@ -9,6 +10,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
+      <ProtectedRoute requiredRole="MERCHANT">
       <div className="max-w-2xl mx-auto text-center py-12">
         <h1 className="text-2xl font-bold text-black mb-4">Your cart is empty</h1>
         <p className="text-gray-600 mb-6">Add items from the store to continue.</p>
@@ -19,10 +21,12 @@ export default function CartPage() {
           Browse products
         </Link>
       </div>
+      </ProtectedRoute>
     )
   }
 
   return (
+    <ProtectedRoute requiredRole="MERCHANT">
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">🛒 Cart</h1>
 
@@ -101,5 +105,6 @@ export default function CartPage() {
         </Link>
       </p>
     </div>
+    </ProtectedRoute>
   )
 }

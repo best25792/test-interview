@@ -147,6 +147,7 @@ export const userApi = {
     username: string
     email: string
     phoneNumber: string
+    role?: string
     isActive?: boolean
     isVerified?: boolean
   }) => {

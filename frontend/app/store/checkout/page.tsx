@@ -7,6 +7,7 @@ import { useStore } from '@/lib/store-context'
 import { paymentApi, orderApi } from '@/lib/api'
 import { MERCHANT_ID } from '@/lib/store-data'
 import { decreaseStock } from '@/lib/store-data'
+import { ProtectedRoute } from '@/app/components/ProtectedRoute'
 
 type Step = 'summary' | 'done' | 'error'
 
@@ -33,12 +34,14 @@ export default function CheckoutPage() {
 
   if (items.length === 0 && step !== 'done' && step !== 'error') {
     return (
-      <div className="max-w-2xl mx-auto text-center py-12">
-        <h1 className="text-2xl font-bold text-black mb-4">Cart is empty</h1>
-        <Link href="/store" className="text-blue-600 hover:text-blue-800">
-          Go to store
-        </Link>
-      </div>
+      <ProtectedRoute requiredRole="MERCHANT">
+        <div className="max-w-2xl mx-auto text-center py-12">
+          <h1 className="text-2xl font-bold text-black mb-4">Cart is empty</h1>
+          <Link href="/store" className="text-blue-600 hover:text-blue-800">
+            Go to store
+          </Link>
+        </div>
+      </ProtectedRoute>
     )
   }
 
@@ -132,6 +135,7 @@ export default function CheckoutPage() {
   }
 
   return (
+    <ProtectedRoute requiredRole="MERCHANT">
     <div className="max-w-2xl mx-auto">
       <h1 className="text-3xl font-bold text-black mb-6">Checkout</h1>
 
@@ -251,5 +255,6 @@ export default function CheckoutPage() {
         </Link>
       </p>
     </div>
+    </ProtectedRoute>
   )
 }

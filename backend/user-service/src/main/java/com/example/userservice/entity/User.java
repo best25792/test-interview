@@ -45,6 +45,10 @@ public class User {
     @Builder.Default
     private Boolean isReviewAccount = false;
 
+    @Column(name = "role", nullable = false, length = 50)
+    @Builder.Default
+    private String role = "PAYMENT_USER";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

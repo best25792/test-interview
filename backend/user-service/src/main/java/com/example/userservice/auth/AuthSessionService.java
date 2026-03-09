@@ -1,7 +1,9 @@
 package com.example.userservice.auth;
 
 import com.example.userservice.entity.DeviceSession;
+import com.example.userservice.entity.User;
 import com.example.userservice.repository.DeviceSessionRepository;
+import com.example.userservice.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,10 +20,13 @@ public class AuthSessionService {
 
     private final JwtService jwtService;
     private final DeviceSessionRepository deviceSessionRepository;
+    private final UserRepository userRepository;
 
-    public AuthSessionService(JwtService jwtService, DeviceSessionRepository deviceSessionRepository) {
+    public AuthSessionService(JwtService jwtService, DeviceSessionRepository deviceSessionRepository,
+                              UserRepository userRepository) {
         this.jwtService = jwtService;
         this.deviceSessionRepository = deviceSessionRepository;
+        this.userRepository = userRepository;
     }
 
     /** SHA-256 hash for refresh token (JWT exceeds BCrypt's 72-byte limit). */
@@ -42,7 +47,9 @@ public class AuthSessionService {
     @Transactional
     public TokenPair createSession(Long userId, String deviceId) {
         deviceSessionRepository.revokeAllByUserId(userId);
-        String accessToken = jwtService.issueAccessToken(userId);
+        User user = userRepository.findById(userId).orElseThrow();
+        List<String> roles = user.getRole() != null ? List.of(user.getRole()) : List.of();
+        String accessToken = jwtService.issueAccessToken(userId, roles);
         String refreshToken = jwtService.issueRefreshToken(userId);
         JwtService.JwtClaims refreshClaims = jwtService.validateRefreshToken(refreshToken);
         String refreshTokenHash = hashRefreshToken(refreshToken);
