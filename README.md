@@ -146,6 +146,9 @@ cd backend/order-service   && ./mvnw spring-boot:run
 
 # 3. Run frontend
 cd frontend && npm install && npm run dev
+
+# 4. (Optional) Run hotel booking Angular app
+cd hotel-booking && npm install && npm start
 ```
 
 ## Service URLs
@@ -153,6 +156,7 @@ cd frontend && npm install && npm run dev
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
+| Hotel Booking (Angular) | http://localhost:4200 |
 | Payment Service API | http://localhost:8083/api/v1/payments |
 | Swagger UI (Payment) | http://localhost:8083/swagger-ui.html |
 | OpenAPI Spec | http://localhost:8083/v3/api-docs |
@@ -211,6 +215,25 @@ All services are instrumented with the **OpenTelemetry Java Agent** (auto-instru
 
 Open **Grafana** at http://localhost:3001 and use the **Explore** view to query each datasource.
 
+## Hotel Booking App (Angular)
+
+A separate Angular frontend for hotel booking, using the same user-service and payment-service.
+
+| Feature | Description |
+|---------|-------------|
+| Hotel search | Filter by name, location, price, available dates |
+| Create booking | Select room, dates, create booking |
+| Payment | QR flow via payment-service (initiate → poll QR → process) |
+| Cancel booking | Cancel pending bookings (no refund) |
+
+**Run the hotel booking app:**
+
+```bash
+cd hotel-booking && npm install && npm start
+```
+
+Runs at **http://localhost:4200**. Requires user-service (8081), payment-service (8083), and hotel-service (8086). See [`docs/hotel-booking-backend-spec.md`](docs/hotel-booking-backend-spec.md) for the hotel-service API spec (to be implemented).
+
 ## Project Structure
 
 ```
@@ -223,6 +246,9 @@ Open **Grafana** at http://localhost:3001 and use the **Explore** view to query 
 │   ├── qr-service/               # QR code generation/validation
 │   └── order-service/            # Merchant orders
 ├── frontend/                     # Next.js app (payments, store, users)
+├── hotel-booking/                # Angular hotel booking app
+├── docs/
+│   └── hotel-booking-backend-spec.md  # Hotel-service API spec
 ├── infra/
 │   ├── observability/
 │   │   ├── alloy-config.alloy          # Grafana Alloy telemetry pipeline

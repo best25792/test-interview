@@ -313,6 +313,17 @@ services:
     networks:
       - monitoring
 
+  # Hotel Booking Angular App (optional - run with: docker compose up hotel-booking)
+  hotel-booking:
+    build:
+      context: ./hotel-booking
+      dockerfile: Dockerfile
+    container_name: hotel-booking
+    ports:
+      - "4200:80"
+    networks:
+      - monitoring
+
   # ============================================
   # Load Testing Tools
   # ============================================
